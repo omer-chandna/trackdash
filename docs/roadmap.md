@@ -5,7 +5,7 @@ after implementation and validation. COMPLETED requires approved integration.
 
 | Feature | Status | Branch | Dependencies | Acceptance criteria / tests | Blockers |
 |---|---|---|---|---|---|
-| Project foundation | IN_PROGRESS | feature/project-foundation | Initial main | Build and launch; dark responsive shell; navigation; source contracts; unit/UI checks; CI | Toolchain setup and validation |
+| Project foundation | IN_REVIEW | feature/project-foundation | Initial main | Debug build/launch, dark shell, navigation, source contracts; 7 JVM + 3 emulator tests pass; lint 0 errors; CI configured | Explicit integration approval; GitHub CI not yet executed |
 | Vehicle simulation | NOT_STARTED | feature/simulation-engine | Approved foundation | Deterministic source; start/stop; scenario tests; visible simulation label | Foundation integration |
 | Dashboard | NOT_STARTED | feature/dashboard-ui | Simulation | Live RPM/temperature/status; portrait/landscape UI tests | Prior integration |
 | Alerts | NOT_STARTED | feature/alert-engine | Sources/dashboard | Configurable hysteresis/duration; unknown never healthy; tests | Threshold evidence/configuration |
