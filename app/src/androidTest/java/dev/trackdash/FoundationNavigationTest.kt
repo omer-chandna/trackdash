@@ -14,7 +14,7 @@ class FoundationNavigationTest {
 
     @Test fun destinationsShowHonestEmptyStatesAndBackReturnsHome() {
         compose.onNodeWithText("Tracks").performClick()
-        compose.onNodeWithText("No saved tracks").assertIsDisplayed()
+        compose.onNodeWithText("Track library").assertIsDisplayed()
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("TRACKDASH").assertIsDisplayed()
         compose.onNodeWithText("Sessions").performClick()
@@ -41,9 +41,10 @@ class FoundationNavigationTest {
         }
         compose.waitForIdle()
         compose.onNodeWithText("Tracks").performClick()
-        compose.onNodeWithText("No saved tracks").assertIsDisplayed()
+        compose.onNodeWithText("Track library").assertIsDisplayed()
         compose.onNodeWithText("Home").performClick()
         compose.onNodeWithText("Combined telemetry").performScrollTo().performClick()
         compose.onNodeWithText("Combined telemetry").assertIsSelected()
     }
 }
+
