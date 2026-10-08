@@ -39,3 +39,21 @@ the repository. Its state survives navigation and configuration changes, but the
 demo stops and clears readings when the app backgrounds. Limits are session-local
 ViewModel settings; they are not persisted across process death. Five ViewModel
 tests cover control/state, warnings, editable limits, restart and cleanup.
+
+## Using the demo
+
+1. On Home, choose **Try vehicle simulation** (independent of the planned modes).
+2. The dashboard shows live RPM/gear, temperatures, speed, throttle, load, voltage,
+   and discrete oil pressure. Every screen identifies the data as simulation.
+3. Open **Scenarios** to select Normal driving, Overheating, Low oil pressure, or
+   OBD disconnect. Return to Normal driving to recover the source.
+4. Use **Warning limits** to edit the coolant/oil demo thresholds. Invalid values
+   cannot be applied. Temperature warnings require two seconds and clear with 3°C
+   hysteresis; a simulated low oil-pressure switch warns immediately.
+5. **Stop simulation** clears values; **Start simulation** begins a fresh normal
+   trajectory. Navigation retains the active demo; Diagnostics can also stop it.
+
+Portrait uses two gauge columns and landscape four, with scrollable overflow for
+small screens/large text. Values stay canonical in core (speed in m/s) and are
+formatted to km/h only in the UI. The demo stores no session history and requests
+no Bluetooth/GPS permissions. It is not a replacement for OEM vehicle warnings.

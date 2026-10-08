@@ -16,13 +16,16 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import dev.trackdash.core.OperatingMode
 import dev.trackdash.main.HomeViewModel
+import dev.trackdash.simulation.SimulationViewModel
+import dev.trackdash.simulation.SimulationScreen
+import dev.trackdash.core.telemetry.AcquisitionStatus
 
 private enum class Destination(val label: String, val symbol: String) {
     HOME("Home", "H"), TRACKS("Tracks", "T"), SESSIONS("Sessions", "S"), DIAGNOSTICS("Diagnostics", "D"),
 }
 
 @Composable
-fun TrackDashApp() {
+fun TrackDashApp(simulation: SimulationViewModel) {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val selected = entry?.destination?.route ?: Destination.HOME.name
@@ -62,7 +65,16 @@ fun TrackDashApp() {
                     }
                 }
                 NavHost(nav, startDestination = Destination.HOME.name, modifier = Modifier.weight(1f)) {
-                    composable(Destination.HOME.name) { HomeScreen() }
+                    composable(Destination.HOME.name) {
+                        HomeScreen(onOpenDemo = {
+                            simulation.start()
+                            nav.navigate("simulation") { launchSingleTop = true }
+                        })
+                    }
+                    composable("simulation") {
+                        val state by simulation.state.collectAsStateWithLifecycle()
+                        SimulationScreen(state, simulation::start, simulation::stop, simulation::selectScenario, simulation::setWarningLimits)
+                    }
                     composable(Destination.TRACKS.name) {
                         Page("Track library", "Your next circuit") {
                             StatusCard("No saved tracks", "Track saving and the timing-gate editor are planned. GPS timing will work independently of map tiles.")
@@ -70,15 +82,20 @@ fun TrackDashApp() {
                     }
                     composable(Destination.SESSIONS.name) {
                         Page("Session history", "Every lap has a story") {
-                            StatusCard("No recorded sessions", "Recording and analysis are planned. This foundation build does not collect or store telemetry.")
+                            StatusCard("No recorded sessions", "Recording and analysis are planned. Simulated readings are displayed live but are not stored.")
                         }
                     }
                     composable(Destination.DIAGNOSTICS.name) {
+                        val state by simulation.state.collectAsStateWithLifecycle()
                         Page("Diagnostics", "Source status") {
                             StatusCard("OBD · Disconnected", "No adapter transport is installed in this build.")
                             StatusCard("GPS · Inactive", "Location acquisition has not started. No GPS quality assessment is available.")
                             StatusCard("Recorder · Inactive", "No samples are being recorded.")
-                            StatusCard("Simulation · Not available", "Simulated driving will be available in a later version.")
+                            StatusCard("Simulation · ${if (state.telemetry.status == AcquisitionStatus.RUNNING) "Running" else "Stopped"}",
+                                "${state.telemetry.receivedSamples} sample batches received. Data source: simulation. No physical vehicle is connected.")
+                            if (state.telemetry.status == AcquisitionStatus.RUNNING) {
+                                Button(onClick = simulation::stop) { Text("Stop simulation") }
+                            }
                         }
                     }
                 }
@@ -88,11 +105,13 @@ fun TrackDashApp() {
 }
 
 @Composable
-private fun HomeScreen(model: HomeViewModel = viewModel()) {
+private fun HomeScreen(onOpenDemo: () -> Unit, model: HomeViewModel = viewModel()) {
     val selectedName by model.mode.collectAsStateWithLifecycle()
     val selected = OperatingMode.valueOf(selectedName)
     Page("TRACKDASH", "Prepare for your next session") {
-        Text("PROJECT FOUNDATION · 0.1", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text("VEHICLE SIMULATION · 0.2", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Button(onClick = onOpenDemo, modifier = Modifier.fillMaxWidth()) { Text("Try vehicle simulation") }
+        Text("Explore synthetic gauges and warning scenarios without a car or adapter.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Choose an operating mode", style = MaterialTheme.typography.titleLarge)
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OperatingMode.entries.forEach { mode ->
@@ -115,7 +134,7 @@ private fun HomeScreen(model: HomeViewModel = viewModel()) {
             }
         }
         StatusCard("Selected: ${selected.title()}", "${selected.description()} Session capture is not available in this preview.")
-        Text("No live or simulated data is being acquired.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Real vehicle and GPS acquisition are not available yet. The demo runs separately from these planned modes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
