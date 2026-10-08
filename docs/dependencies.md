@@ -20,3 +20,8 @@ AGP supplies Android Kotlin support; do not apply the legacy Kotlin Android plug
 Navigation Compose provides a small established back stack; revisit Navigation 3
 when more complex multi-pane navigation is needed. Room, DataStore, Hilt, and
 MapLibre will be verified and pinned with their first functional integrations.
+
+CI actions are pinned by commit to official release tags verified through GitHub
+on the same date: checkout v7.0.1, setup-java v6.0.1, setup-android v4.0.4,
+gradle/actions v6.4.0, upload-artifact v7.0.2, android-emulator-runner v2.38.0.
+The workflow uses hosted Ubuntu runners; remote execution remains unverified.
