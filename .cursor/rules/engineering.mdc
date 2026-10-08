@@ -4,7 +4,7 @@ alwaysApply: true
 ---
 
 - Read docs/roadmap.md and inspect Git status before work. Preserve existing work.
-- Use one dedicated feature branch per coherent increment; never develop on main.
+- The owner authorized direct local commits to main on 2026-10-08. Use small verified increments on main for this continuation; feature branches remain available when useful.
 - Use approved integration points for dependent features. Never merge without explicit authorization.
 - Make small atomic Conventional Commits; selectively stage and review every diff.
 - Do not force-push, rewrite shared history, delete user branches, or discard changes.

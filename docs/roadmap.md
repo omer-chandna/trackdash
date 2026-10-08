@@ -5,9 +5,9 @@ after implementation and validation. COMPLETED requires approved integration.
 
 | Feature | Status | Branch | Dependencies | Acceptance criteria / tests | Blockers |
 |---|---|---|---|---|---|
-| Project foundation | IN_REVIEW | feature/project-foundation | Initial main | Debug build/launch, dark shell, navigation, source contracts; 7 JVM + 3 emulator tests pass; lint 0 errors; CI configured | Explicit integration approval; GitHub CI not yet executed |
-| Vehicle simulation | NOT_STARTED | feature/simulation-engine | Approved foundation | Deterministic source; start/stop; scenario tests; visible simulation label | Foundation integration |
-| Dashboard | NOT_STARTED | feature/dashboard-ui | Simulation | Live RPM/temperature/status; portrait/landscape UI tests | Prior integration |
+| Project foundation | COMPLETED | main (from feature/project-foundation) | Initial main | Debug build/launch, dark shell, navigation, source contracts; 7 JVM + 3 emulator tests pass; lint 0 errors; CI configured | GitHub CI not yet executed |
+| Vehicle simulation | IN_PROGRESS | main (owner-authorized) | Foundation | Deterministic source; start/stop; scenario tests; visible simulation label | None |
+| Dashboard | NOT_STARTED | main (owner-authorized) | Simulation | Live RPM/temperature/status; portrait/landscape UI tests | Simulation implementation |
 | Alerts | NOT_STARTED | feature/alert-engine | Sources/dashboard | Configurable hysteresis/duration; unknown never healthy; tests | Threshold evidence/configuration |
 | GPS source/quality | NOT_STARTED | feature/gps-location | Foundation | Offline fixes, monotonic time, age/rate/quality; dropout tests | Runtime permission/device checks |
 | Gate geometry | NOT_STARTED | feature/gps-gate-crossing | Core models | Finite intersections, direction, interpolation, invalid/jump/accuracy tests | Foundation integration |

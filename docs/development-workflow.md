@@ -1,5 +1,15 @@
 # Development workflow
 
+## Active owner authorization (2026-10-08)
+
+The owner approved continuing development and making commits to `main`. Foundation
+has been fast-forwarded into local main. This supersedes the original branch-only
+and per-increment integration approval requirements for this continuation. Make
+small, verified local commits on main; retain review summaries and accurate status.
+This does not authorize remote publication, force-pushes, releases or destructive operations.
+
+## Default workflow
+
 1. Inspect the working tree, relevant source, tests, and roadmap.
 2. Scope one independently reviewable feature and write acceptance criteria.
 3. Branch from an approved integration point. Preserve user changes.
