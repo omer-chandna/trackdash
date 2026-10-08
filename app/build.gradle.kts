@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -32,6 +34,11 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.savedstate)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.core)
+    implementation(libs.serialization.json)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    implementation(libs.datastore)
+    implementation(libs.maplibre)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     androidTestImplementation(platform(libs.compose.bom))
@@ -41,3 +48,4 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 }
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }

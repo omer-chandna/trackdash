@@ -48,6 +48,9 @@ class SimulatedVehicleSource(private val elapsedRealtimeNanos: () -> Long) : Veh
                 SensorId.THROTTLE to throttle,
                 SensorId.ENGINE_LOAD to throttle * 0.9,
                 SensorId.VOLTAGE to 13.8 + 0.2 * sin(cycleSeconds),
+                SensorId.IGNITION_TIMING to 15.0 + throttle / 10.0,
+                SensorId.MASS_AIR_FLOW to 10.0 + throttle,
+                SensorId.AMBIENT_TEMPERATURE to 24.0,
             )
             return VehicleSample(
                 readings = values.map { (sensor, value) ->

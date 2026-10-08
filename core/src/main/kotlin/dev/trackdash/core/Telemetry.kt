@@ -2,7 +2,7 @@ package dev.trackdash.core
 
 import kotlinx.coroutines.flow.Flow
 
-enum class SensorUnit { RPM, CELSIUS, METERS_PER_SECOND, PERCENT, VOLTS }
+enum class SensorUnit { RPM, CELSIUS, METERS_PER_SECOND, PERCENT, VOLTS, DEGREES, GRAMS_PER_SECOND }
 enum class SensorId(val unit: SensorUnit) {
     ENGINE_RPM(SensorUnit.RPM),
     COOLANT_TEMPERATURE(SensorUnit.CELSIUS),
@@ -12,6 +12,9 @@ enum class SensorId(val unit: SensorUnit) {
     THROTTLE(SensorUnit.PERCENT),
     ENGINE_LOAD(SensorUnit.PERCENT),
     VOLTAGE(SensorUnit.VOLTS),
+    IGNITION_TIMING(SensorUnit.DEGREES),
+    MASS_AIR_FLOW(SensorUnit.GRAMS_PER_SECOND),
+    AMBIENT_TEMPERATURE(SensorUnit.CELSIUS),
 }
 enum class SensorSource { OBD, SIMULATION }
 enum class SensorStatus { AVAILABLE, UNSUPPORTED, UNAVAILABLE, STALE, ERROR }
@@ -19,6 +22,7 @@ enum class OilPressureStatus { OK, LOW, UNKNOWN, UNAVAILABLE }
 enum class GpsQuality { ACQUIRING, READY, DEGRADED, LOST }
 
 /** Time is elapsed realtime, in nanoseconds; values remain in canonical units. */
+@kotlinx.serialization.Serializable
 data class SensorReading(
     val sensorId: SensorId,
     val value: Double?,
@@ -34,6 +38,7 @@ data class SensorReading(
     }
 }
 
+@kotlinx.serialization.Serializable
 data class GpsFix(
     val latitude: Double,
     val longitude: Double,

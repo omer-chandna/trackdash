@@ -3,6 +3,7 @@ package dev.trackdash.core.gps
 import dev.trackdash.core.GpsFix
 import kotlin.math.roundToLong
 
+@kotlinx.serialization.Serializable
 data class TimingPolicy(val maximumAccuracyMeters: Double = 25.0, val maximumGapNanos: Long = 3_000_000_000,
     val maximumSpeedMetersPerSecond: Double = 100.0, val minimumLapNanos: Long = 5_000_000_000,
     val minimumLapDistanceMeters: Double = 100.0, val cooldownNanos: Long = 3_000_000_000) {
@@ -13,6 +14,7 @@ data class TimingPolicy(val maximumAccuracyMeters: Double = 25.0, val maximumGap
         require(minimumLapDistanceMeters.isFinite() && minimumLapDistanceMeters >= 0)
     }
 }
+@kotlinx.serialization.Serializable
 data class TimedLap(val number: Int, val startNanos: Long, val endNanos: Long,
     val sectorNanos: List<Long>, val invalidReasons: Set<String>) {
     val durationNanos get() = endNanos - startNanos

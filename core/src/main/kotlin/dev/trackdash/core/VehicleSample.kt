@@ -1,6 +1,7 @@
 package dev.trackdash.core
 
 /** A delivery batch, not a claim that physical sensors were acquired simultaneously. */
+@kotlinx.serialization.Serializable
 data class VehicleSample(
     val readings: List<SensorReading>,
     val oilPressure: OilPressureStatus,
