@@ -1,0 +1,26 @@
+---
+description: TrackDash engineering and verification standards
+alwaysApply: true
+---
+
+- Read docs/roadmap.md and inspect Git status before work. Preserve existing work.
+- Use one dedicated feature branch per coherent increment; never develop on main.
+- Use approved integration points for dependent features. Never merge without explicit authorization.
+- Make small atomic Conventional Commits; selectively stage and review every diff.
+- Do not force-push, rewrite shared history, delete user branches, or discard changes.
+- Prefer TDD for deterministic domain logic. Include regression tests with fixes.
+- Run relevant tests and compilation after meaningful increments; run lint and a debug build before review.
+- Report only checks actually executed. Record tooling blockers and distinguish automated from hardware validation.
+- Maintain Kotlin/Compose MVVM with immutable UI state, StateFlow, and structured concurrency.
+- Keep transport, protocol, decoding, vehicle capabilities, GPS timing, persistence, and UI separate.
+- GPS-only operation must not depend on OBD. Simulation and hardware share source interfaces.
+- Preserve canonical units, acquisition timestamps, and explicit missing/stale/error states.
+- Never fabricate telemetry, diagnostic commands, oil pressure values, or healthy states.
+- Verify proprietary protocols and adapter requirements with evidence and parser fixtures before implementation.
+- Use finite gate intersections and monotonic interpolated timestamps for timing; reject bad fixes and crossings.
+- Keep recording bounded and off the UI thread; preserve independent source rates.
+- No secrets, unrelated edits, dead controls, fake success states, or undocumented placeholders.
+- Update documentation with implementation. docs/roadmap.md is the status authority.
+- Leave unmerged features IN_REVIEW; COMPLETED requires approved integration.
+- Prepare a PR-style summary with purpose, decisions, actual checks, limitations, and dependencies.
+- Do not publish PRs, releases, or sensitive captures without authorization.
