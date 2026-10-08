@@ -1,5 +1,9 @@
 # Foundation branch review
 
+Historical review from before integration. The owner subsequently approved and
+fast-forwarded this foundation into local main on 2026-10-08. Current status is
+maintained in the roadmap; see the vehicle-simulation review for the next increment.
+
 Branch: `feature/project-foundation` → `main` (local, unmerged).
 
 ## Purpose and scope

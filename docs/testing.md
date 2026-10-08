@@ -22,9 +22,23 @@ or manual dispatch. Workflow execution on GitHub is not verified until published
   selected mode after navigation/recreation; landscape navigation and selection.
 - Debug APK and test APK compilation; Android lint.
 
-All ten tests passed locally on 2026-10-08, with the device tests on an Android 10
+The original ten tests passed locally on 2026-10-08, with the device tests on an Android 10
 x86_64 Pixel 2 emulator using WHPX. Emulator launch was verified. Target API 37
 runtime behavior and physical devices have not been tested.
+
+## Simulation validation
+
+The suite now has **29 JVM tests** (24 core + 5 app ViewModel) and **7 instrumented
+tests** (3 foundation + 4 simulation), all passing locally on 2026-10-08.
+Simulation coverage includes deterministic replay, faults, cancellation, idempotent
+start, restart, source errors, hold/hysteresis rules, unknown/stale data, live
+updates, limit editing, rotation/recreation, and background shutdown.
+Debug build and lint passed; the latest lint report says no issues found.
+Portrait/landscape captures were visually inspected after compacting the landscape
+controls so all eight gauge tiles fit on the test phone at default text size.
+
+ViewModel coroutine tests clear the ViewModelStore inside the runTest block before
+its scheduler drains; teardown afterward is too late for an endless source stream.
 
 Reports: `core/build/reports/tests/test/`, `app/build/reports/androidTests/connected/`,
 and `app/build/reports/lint-results-debug.html`. Build artifacts are ignored by Git.

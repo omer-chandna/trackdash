@@ -2,13 +2,16 @@
 
 This is the authoritative status record. Unmerged work remains IN_REVIEW even
 after implementation and validation. COMPLETED requires approved integration.
+The owner authorized continued local commits to main on 2026-10-08. Future branch
+names below are suggested feature scopes, not a requirement to ask again to integrate.
 
 | Feature | Status | Branch | Dependencies | Acceptance criteria / tests | Blockers |
 |---|---|---|---|---|---|
 | Project foundation | COMPLETED | main (from feature/project-foundation) | Initial main | Debug build/launch, dark shell, navigation, source contracts; 7 JVM + 3 emulator tests pass; lint 0 errors; CI configured | GitHub CI not yet executed |
-| Vehicle simulation | IN_PROGRESS | main (owner-authorized) | Foundation | Deterministic source; start/stop; scenario tests; visible simulation label | None |
-| Dashboard | NOT_STARTED | main (owner-authorized) | Simulation | Live RPM/temperature/status; portrait/landscape UI tests | Simulation implementation |
-| Alerts | NOT_STARTED | feature/alert-engine | Sources/dashboard | Configurable hysteresis/duration; unknown never healthy; tests | Threshold evidence/configuration |
+| Vehicle simulation | COMPLETED | main (owner-authorized) | Foundation | Deterministic source; start/stop; scenarios; replay/cancellation/repository tests; visible labels | GPS simulation and recording are separate future work |
+| Simulation dashboard | COMPLETED | main (owner-authorized) | Simulation | Live RPM/gear/temperature/status; 7 total emulator tests including fault/rotation/background; screenshots | Hardware sources not implemented |
+| Basic simulation warnings | COMPLETED | main (owner-authorized) | Sources/dashboard | Editable demo thresholds; duration/hysteresis, missing values, low pressure/disconnect; 8 engine + 5 ViewModel tests | Demo defaults are not vehicle guidance |
+| Full vehicle alert system | NOT_STARTED | feature/alert-engine | Basic warnings, physical sources, persistence | Persistent enable/limits, stale/lost GPS/RPM rules, audible alerts and event history | Verified thresholds or user configuration; source integration |
 | GPS source/quality | NOT_STARTED | feature/gps-location | Foundation | Offline fixes, monotonic time, age/rate/quality; dropout tests | Runtime permission/device checks |
 | Gate geometry | NOT_STARTED | feature/gps-gate-crossing | Core models | Finite intersections, direction, interpolation, invalid/jump/accuracy tests | Foundation integration |
 | Lap timing | NOT_STARTED | feature/lap-timing | Geometry | First crossing starts; next completes; duplicate/minimum duration/distance tests | Prior integration |

@@ -3,10 +3,11 @@
 Native Android motorsport telemetry and GPS lap timing, developed in small,
 reviewable increments. Android 10 (API 29) and newer; compile/target API 37.
 
-The foundation provides a dark Compose shell, Home/Tracks/Sessions/Diagnostics
-navigation, portrait/landscape layouts, and lifecycle-restored operating-mode
-selection. Core Kotlin contracts keep vehicle and GPS sources independent.
-**This build does not yet acquire telemetry, simulate driving, time laps, or record sessions.**
+Version 0.2 adds a working vehicle simulator: live gauges, start/stop, fault
+scenarios, and editable demo warning limits. The dark Compose app supports
+portrait/landscape, navigation, and lifecycle-restored operating-mode selection.
+Core Kotlin contracts keep vehicle and GPS sources independent.
+**Real OBD/GPS acquisition, lap timing and session recording are not implemented yet.**
 
 ## Build and install
 
@@ -24,15 +25,22 @@ On macOS/Linux use `./gradlew`. The wrapper verifies the Gradle distribution
 checksum. First-time dependency downloads need network access; the foundation
 app itself works offline and requests no network, GPS, or Bluetooth permissions.
 
-Launch TrackDash, select a mode on Home, and navigate through the four sections.
-Selection survives navigation and activity recreation. It is preparation only;
-there is deliberately no session-start control before acquisition exists.
+Launch TrackDash and choose **Try vehicle simulation**. RPM, gear, temperatures,
+speed, throttle, load, voltage and oil-pressure switch state update live. Use
+**Scenarios** for overheating, low pressure or OBD disconnect, and **Warning limits**
+to edit the demo thresholds. Stop clears values; restarting begins normal driving.
+All measurements are explicitly simulated. No car, adapter or network is needed.
+
+The demo continues through rotation/navigation and stops when the app backgrounds.
+It does not record data. Planned real operating-mode selection remains separate.
+See [simulation guide](docs/simulation.md) for behavior and limitations.
 
 ## Planned workflows
 
 | Workflow | Current availability |
 |---|---|
-| Simulation | Source contracts only; deterministic vehicle/GPS simulation is next |
+| Vehicle simulation | Implemented: deterministic stream, live gauges, faults, editable demo alerts |
+| GPS simulation | Not implemented; will exercise the real crossing/timing engine |
 | Pair/connect OBD adapter | Not implemented; Bluetooth Classic will come before verified BLE drivers |
 | Create a track and draw start/finish | Not implemented; planned MapLibre editor with finite directional gates |
 | Start sessions and record laps | Not implemented; GPS-only, OBD-only, and combined paths planned |
@@ -41,8 +49,8 @@ there is deliberately no session-start control before acquisition exists.
 
 See [roadmap](docs/roadmap.md) for acceptance criteria and integration dependencies,
 [architecture](docs/architecture.md), [testing](docs/testing.md), and
-[known limitations](docs/known-limitations.md). The [foundation review](docs/reviews/project-foundation.md)
-records the delivered increment and validation. No hardware capability is claimed.
+[known limitations](docs/known-limitations.md). The [simulation review](docs/reviews/vehicle-simulation.md)
+records this increment and validation. No hardware capability is claimed.
 
 Contributions follow [CONTRIBUTING.md](CONTRIBUTING.md). The owner has not selected
 a project license yet.
