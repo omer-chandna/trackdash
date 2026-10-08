@@ -59,5 +59,5 @@ data class GpsFix(
 }
 
 /** Cold streams: collection acquires resources; cancellation must release them. */
-interface VehicleSource { fun readings(): Flow<SensorReading> }
+interface VehicleSource { fun samples(): Flow<VehicleSample> }
 interface LocationSource { fun fixes(): Flow<GpsFix> }
