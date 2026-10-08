@@ -43,7 +43,8 @@ class SimulatedGpsSource(private val monotonicNanos: () -> Long, private val wal
             elapsed += ((now - previous) * 60.0 / lapSeconds.value.coerceIn(20.0, 300.0)).toLong()
             previous = now
             if (!dropout.value) {
-                val fix = DemoCircuit.fixAt(elapsed, now, wallMillis())
+                val base = DemoCircuit.fixAt(elapsed, now, wallMillis())
+                val fix = base.copy(speedMetersPerSecond = base.speedMetersPerSecond!! * 60.0 / lapSeconds.value.coerceIn(20.0, 300.0))
                 emit(if (jump.value) fix.copy(latitude = fix.latitude + 0.1) else fix)
                 jump.value = false
             }
