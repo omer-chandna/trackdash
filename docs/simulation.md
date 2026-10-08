@@ -33,3 +33,9 @@ Missing/stale readings reset temperature evaluation; no absence of alerts implie
 healthy oil pressure. The demo UI will supply clearly labeled, editable synthetic
 limits. These are not manufacturer thresholds. Audible notifications, persisted
 settings, alert history and real-vehicle warning presets remain planned.
+
+The activity-scoped SimulationViewModel injects a monotonic clock and source into
+the repository. Its state survives navigation and configuration changes, but the
+demo stops and clears readings when the app backgrounds. Limits are session-local
+ViewModel settings; they are not persisted across process death. Five ViewModel
+tests cover control/state, warnings, editable limits, restart and cleanup.
