@@ -20,3 +20,9 @@ part of this vehicle-source increment.
 
 Source tests cover deterministic replay, bounded values and gear changes, fault
 states, ten-hertz virtual-time delivery, collector cancellation, and restart time.
+
+The shared `VehicleTelemetryRepository` retains only the latest batch and a count.
+Start is idempotent, stop cancels collection and clears live values, and failures
+are explicit. It is owned by a lifecycle scope; operations and delivery run on that
+scope's dispatcher. Physical sources must move blocking work off the UI thread.
+Repository tests cover cancellation, repeated start, restart, failure and completion.
