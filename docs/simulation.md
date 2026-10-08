@@ -26,3 +26,10 @@ Start is idempotent, stop cancels collection and clears live values, and failure
 are explicit. It is owned by a lifecycle scope; operations and delivery run on that
 scope's dispatcher. Physical sources must move blocking work off the UI thread.
 Repository tests cover cancellation, repeated start, restart, failure and completion.
+
+The basic warning evaluator accepts explicit temperature rules and applies a
+minimum duration plus hysteresis. It also reports low pressure and data loss.
+Missing/stale readings reset temperature evaluation; no absence of alerts implies
+healthy oil pressure. The demo UI will supply clearly labeled, editable synthetic
+limits. These are not manufacturer thresholds. Audible notifications, persisted
+settings, alert history and real-vehicle warning presets remain planned.
