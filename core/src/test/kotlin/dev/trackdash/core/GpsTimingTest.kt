@@ -24,6 +24,15 @@ class GpsTimingTest {
         assertThrows(IllegalArgumentException::class.java) { TimingGate("x", "x", GeoPoint(0.0, 0.0), GeoPoint(0.0, 0.0)) }
     }
     private fun fix(second: Int) = DemoCircuit.fixAt(second * 1_000_000_000L, second * 1_000_000_000L, second * 1000L)
+    @Test fun `timestamps remain ordered across signal gaps`() {
+        val timer = LapTimer(DemoCircuit.track)
+        timer.accept(fix(10))
+        timer.markGap()
+        timer.accept(fix(9))
+        assertEquals(1, timer.rejectedFixes)
+        timer.accept(fix(11))
+        assertEquals(1, timer.rejectedFixes)
+    }
     @Test fun `first crossing starts then consecutive laps and sectors use real geometry`() {
         val timer = LapTimer(DemoCircuit.track)
         val laps = (0..180).flatMap { timer.accept(fix(it)) }

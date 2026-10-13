@@ -78,5 +78,6 @@ private fun SessionDetails(session: SessionRow, dao: TrackDashDao, onExport: () 
         Button(onClick = { scope.launch { noteStatus = runCatching { dao.setNotes(session.id, notes); "Notes saved" }.getOrElse { "Save failed: ${it.message}" } } }) { Text("Save notes") }
         if (noteStatus.isNotEmpty()) Text(noteStatus)
         Button(onClick = onExport, enabled = session.status != "RECORDING") { Text("Export CSV") }
+        AnalysisPanel(session, dao, laps)
     }
 }

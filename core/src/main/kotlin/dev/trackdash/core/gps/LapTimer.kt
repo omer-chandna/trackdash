@@ -24,6 +24,7 @@ data class TimedLap(val number: Int, val startNanos: Long, val endNanos: Long,
 /** Bounded state only. Callers persist returned laps; GPS/OBD/maps are independent. */
 class LapTimer(val track: Track, private val policy: TimingPolicy = TimingPolicy()) {
     private var previous: GpsFix? = null
+    private var latestTimestamp: Long? = null
     var startedAtNanos: Long? = null; private set
     var lastLap: TimedLap? = null; private set
     var bestLap: TimedLap? = null; private set
@@ -44,6 +45,10 @@ class LapTimer(val track: Track, private val policy: TimingPolicy = TimingPolicy
     }
 
     fun accept(fix: GpsFix): List<TimedLap> {
+        if (latestTimestamp?.let { fix.elapsedRealtimeNanos <= it } == true) {
+            rejectedFixes++; return emptyList()
+        }
+        latestTimestamp = fix.elapsedRealtimeNanos
         if (fix.horizontalAccuracyMeters > policy.maximumAccuracyMeters || fix.latitude !in -85.0..85.0) {
             rejectedFixes++; markGap("Poor GPS accuracy"); return emptyList()
         }
