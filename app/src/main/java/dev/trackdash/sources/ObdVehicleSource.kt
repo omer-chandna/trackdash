@@ -11,28 +11,29 @@ data class ObdDiagnostics(val state: String = "Disconnected", val ecu: String = 
     val latencyMillis: Long = 0, val errors: Int = 0, val queries: Long = 0, val protocol: String = "",
     val vin: String? = null, val vinStatus: String = "Not requested", val firmware: String = "")
 
-class ObdVehicleSource(private val context: Context, private val address: String) : VehicleSource {
+class ObdVehicleSource(private val context: Context, private val address: String, private val bleCx: Boolean = false) : VehicleSource {
     private val mutableDiagnostics = MutableStateFlow(ObdDiagnostics())
     val diagnostics = mutableDiagnostics.asStateFlow()
     override fun samples(): Flow<VehicleSample> = flow {
         var retries = 0
         while (currentCoroutineContext().isActive) {
-            var transport: RfcommTransport? = null
+            var transport: ElmTransport? = null
             try {
                 mutableDiagnostics.value = mutableDiagnostics.value.copy(state = "Connecting")
-                transport = RfcommTransport.connect(context, address)
-                val protocol = ElmProtocol(transport)
+                val connection: ElmTransport = if (bleCx) CxBleTransport.connect(context, address) else RfcommTransport.connect(context, address)
+                transport = connection
+                val protocol = ElmProtocol(connection)
                 mutableDiagnostics.value = mutableDiagnostics.value.copy(state = "Initializing")
                 protocol.initialize()
-                val firmware = transport.exchange("ATI").trim()
-                val protocolName = transport.exchange("ATDP").trim()
+                val firmware = connection.exchange("ATI").trim()
+                val protocolName = connection.exchange("ATDP").trim()
                 mutableDiagnostics.value = mutableDiagnostics.value.copy(state = "Discovering vehicle")
                 val capabilities = protocol.discover()
                 val ecu = capabilities.keys.sorted().firstOrNull() ?: error("No responding ECU")
                 val supported = capabilities.getValue(ecu)
                 val active = StandardPids.all.filter { it.code in supported }
                 check(active.isNotEmpty()) { "No supported dashboard PIDs" }
-                val vinResult = runCatching { VinDecoder.decode(transport.exchange("0902", 8000))[ecu] }
+                val vinResult = runCatching { VinDecoder.decode(connection.exchange("0902", 8000))[ecu] }
                 vinResult.exceptionOrNull()?.let { if (it is CancellationException) throw it }
                 mutableDiagnostics.value = ObdDiagnostics("Connected", ecu, supported, protocol = protocolName,
                     vin = vinResult.getOrNull(), vinStatus = if (vinResult.getOrNull() != null) "Retrieved" else "Unavailable / unsupported framing", firmware = firmware)
@@ -67,3 +68,4 @@ class ObdVehicleSource(private val context: Context, private val address: String
         }
     }.flowOn(Dispatchers.IO)
 }
+
