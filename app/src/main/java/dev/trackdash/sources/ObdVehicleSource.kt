@@ -8,7 +8,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class ObdDiagnostics(val state: String = "Disconnected", val ecu: String = "", val supported: Set<Int> = emptySet(),
-    val latencyMillis: Long = 0, val errors: Int = 0, val queries: Long = 0, val protocol: String = "")
+    val latencyMillis: Long = 0, val errors: Int = 0, val queries: Long = 0, val protocol: String = "",
+    val vin: String? = null, val vinStatus: String = "Not requested", val firmware: String = "")
 
 class ObdVehicleSource(private val context: Context, private val address: String) : VehicleSource {
     private val mutableDiagnostics = MutableStateFlow(ObdDiagnostics())
@@ -23,6 +24,7 @@ class ObdVehicleSource(private val context: Context, private val address: String
                 val protocol = ElmProtocol(transport)
                 mutableDiagnostics.value = mutableDiagnostics.value.copy(state = "Initializing")
                 protocol.initialize()
+                val firmware = transport.exchange("ATI").trim()
                 val protocolName = transport.exchange("ATDP").trim()
                 mutableDiagnostics.value = mutableDiagnostics.value.copy(state = "Discovering vehicle")
                 val capabilities = protocol.discover()
@@ -30,7 +32,10 @@ class ObdVehicleSource(private val context: Context, private val address: String
                 val supported = capabilities.getValue(ecu)
                 val active = StandardPids.all.filter { it.code in supported }
                 check(active.isNotEmpty()) { "No supported dashboard PIDs" }
-                mutableDiagnostics.value = ObdDiagnostics("Connected", ecu, supported, protocol = protocolName)
+                val vinResult = runCatching { VinDecoder.decode(transport.exchange("0902", 8000))[ecu] }
+                vinResult.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                mutableDiagnostics.value = ObdDiagnostics("Connected", ecu, supported, protocol = protocolName,
+                    vin = vinResult.getOrNull(), vinStatus = if (vinResult.getOrNull() != null) "Retrieved" else "Unavailable / unsupported framing", firmware = firmware)
                 val readings = SensorId.entries.associateWith { sensor ->
                     SensorReading(sensor, null, SystemClock.elapsedRealtimeNanos(), SensorSource.OBD,
                         if (active.any { it.sensor == sensor }) SensorStatus.UNAVAILABLE else SensorStatus.UNSUPPORTED)

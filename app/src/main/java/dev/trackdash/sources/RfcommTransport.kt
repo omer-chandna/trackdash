@@ -5,10 +5,12 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import dev.trackdash.core.obd.ElmTransport
+import dev.trackdash.core.obd.ElmCommands
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import java.io.EOFException
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -27,9 +29,8 @@ class RfcommTransport private constructor(private val socket: BluetoothSocket) :
         }
     }
     override suspend fun exchange(command: String, timeoutMillis: Long): String = mutex.withLock {
-        require(command in setOf("ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATSP0", "ATDP", "ATI") ||
-            command.matches(Regex("01[0-9A-F]{2}")) || command == "0902") { "Read-only diagnostic commands only" }
-        withTimeout(timeoutMillis) {
+        ElmCommands.requireReadOnly(command)
+        try { withTimeout(timeoutMillis) {
             socketCall {
                 socket.outputStream.write((command + "\r").toByteArray(Charsets.US_ASCII))
                 socket.outputStream.flush()
@@ -43,7 +44,7 @@ class RfcommTransport private constructor(private val socket: BluetoothSocket) :
                 }
                 response.toString()
             }
-        }
+        } } catch (timeout: TimeoutCancellationException) { throw java.io.IOException("Adapter response timed out", timeout) }
     }
     override fun close() {
         try { socket.close() } catch (_: java.io.IOException) { /* Already disconnected. */ }
@@ -57,6 +58,7 @@ class RfcommTransport private constructor(private val socket: BluetoothSocket) :
             val socket = adapter.getRemoteDevice(address).createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
             val transport = RfcommTransport(socket)
             try { withTimeout(10_000) { transport.socketCall { socket.connect() } }; return transport }
+            catch (timeout: TimeoutCancellationException) { transport.close(); throw java.io.IOException("Adapter connection timed out", timeout) }
             catch (error: Exception) { transport.close(); throw error }
         }
     }
