@@ -22,6 +22,7 @@ import dev.trackdash.core.telemetry.AcquisitionStatus
 import dev.trackdash.recording.RecordingScreen
 import dev.trackdash.recording.SessionsScreen
 import dev.trackdash.tracks.TracksScreen
+import dev.trackdash.settings.SettingsScreen
 
 private enum class Destination(val label: String, val symbol: String) {
     HOME("Home", "H"), TRACKS("Tracks", "T"), SESSIONS("Sessions", "S"), DIAGNOSTICS("Diagnostics", "D"),
@@ -69,7 +70,7 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                 }
                 NavHost(nav, startDestination = Destination.HOME.name, modifier = Modifier.weight(1f)) {
                     composable(Destination.HOME.name) {
-                        HomeScreen(onRecord = { nav.navigate("recording") }, onOpenDemo = {
+                        HomeScreen(onSettings = { nav.navigate("settings") }, onRecord = { mode -> nav.navigate("recording/${mode.name}") }, onOpenDemo = {
                             simulation.start()
                             nav.navigate("simulation") { launchSingleTop = true }
                         })
@@ -78,7 +79,8 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                         val state by simulation.state.collectAsStateWithLifecycle()
                         SimulationScreen(state, simulation::start, simulation::stop, simulation::selectScenario, simulation::setWarningLimits)
                     }
-                    composable("recording") { RecordingScreen() }
+                    composable("recording/{mode}") { entry -> RecordingScreen(entry.arguments?.getString("mode") ?: OperatingMode.GPS_LAP_TIMER.name) }
+                    composable("settings") { SettingsScreen() }
                     composable(Destination.TRACKS.name) {
                         TracksScreen()
                     }
@@ -86,17 +88,7 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                         SessionsScreen()
                     }
                     composable(Destination.DIAGNOSTICS.name) {
-                        val state by simulation.state.collectAsStateWithLifecycle()
-                        Page("Diagnostics", "Source status") {
-                            StatusCard("OBD · Disconnected", "No adapter transport is installed in this build.")
-                            StatusCard("GPS · Inactive", "Location acquisition has not started. No GPS quality assessment is available.")
-                            StatusCard("Recorder · Inactive", "No samples are being recorded.")
-                            StatusCard("Simulation · ${if (state.telemetry.status == AcquisitionStatus.RUNNING) "Running" else "Stopped"}",
-                                "${state.telemetry.receivedSamples} sample batches received. Data source: simulation. No physical vehicle is connected.")
-                            if (state.telemetry.status == AcquisitionStatus.RUNNING) {
-                                Button(onClick = simulation::stop) { Text("Stop simulation") }
-                            }
-                        }
+                        dev.trackdash.recording.DiagnosticsScreen()
                     }
                 }
             }
@@ -105,13 +97,14 @@ fun TrackDashApp(simulation: SimulationViewModel) {
 }
 
 @Composable
-private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: () -> Unit, model: HomeViewModel = viewModel()) {
+private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit, onSettings: () -> Unit, model: HomeViewModel = viewModel()) {
     val selectedName by model.mode.collectAsStateWithLifecycle()
     val selected = OperatingMode.valueOf(selectedName)
     Page("TRACKDASH", "Prepare for your next session") {
-        Text("VEHICLE SIMULATION · 0.2", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text("TELEMETRY & LAP TIMING · 0.3", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         Button(onClick = onOpenDemo, modifier = Modifier.fillMaxWidth()) { Text("Try vehicle simulation") }
-        Button(onClick = onRecord, modifier = Modifier.fillMaxWidth()) { Text("Set up recording") }
+        Button(onClick = { onRecord(selected) }, modifier = Modifier.fillMaxWidth()) { Text("Set up recording") }
+        TextButton(onClick = onSettings) { Text("Vehicles & settings") }
         Text("Explore synthetic gauges and warning scenarios without a car or adapter.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Choose an operating mode", style = MaterialTheme.typography.titleLarge)
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
