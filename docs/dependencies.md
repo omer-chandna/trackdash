@@ -25,3 +25,20 @@ CI actions are pinned by commit to official release tags verified through GitHub
 on the same date: checkout v7.0.1, setup-java v6.0.1, setup-android v4.0.4,
 gradle/actions v6.4.0, upload-artifact v7.0.2, android-emulator-runner v2.38.0.
 The workflow uses hosted Ubuntu runners; remote execution remains unverified.
+
+## Integrated data/map dependencies
+
+Pinned and resolved in the integrated 0.3 build:
+
+| Component | Pin | Evidence |
+|---|---|---|
+| Room | 2.8.5 | https://developer.android.com/jetpack/androidx/releases/room |
+| DataStore | 1.2.1 | https://developer.android.com/jetpack/androidx/releases/datastore |
+| MapLibre Android | 13.6.1 | https://maplibre.org/maplibre-native/android/api/ |
+| KSP | 2.3.12 | https://github.com/google/ksp/releases |
+| kotlinx.serialization | 1.11.0 | Maven Central metadata; version catalog |
+
+Room schema generation uses KSP and exports the v1 schema. DataStore is used for
+profile settings, serialization for persisted/shareable typed payloads, and
+MapLibre for editor/path rendering and offline-region package import. Manual
+application composition remains in use; Hilt has not been introduced.

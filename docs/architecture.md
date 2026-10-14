@@ -1,41 +1,46 @@
 # Architecture
 
-TrackDash is an offline-first native Android application for vehicle telemetry,
-GPS timing, and combined recording. Minimum Android version: 10 (API 29).
+Two modules keep Android dependencies out of timing/protocol logic. `core` owns
+validated telemetry models, cold source contracts, geometry/lap timing, alerts,
+standard PID decoding, VIN/prompt framing and CSV field serialization. `app`
+owns Android sources, Room, DataStore, foreground recording, MapLibre and Compose.
 
-Start with two modules: `app` owns Android lifecycle, composition and UI;
-`core` owns platform-independent models and source contracts. Feature packages
-will grow inside these boundaries before further Gradle modules are justified.
+`TrackDashApplication` is the manual composition root: one Room database,
+application initialization/recovery job, recording StateFlow and simulation
+controls. The isolated quick demo retains its ViewModel/repository lifecycle.
+Library/settings screens collect Room/DataStore flows and issue suspend writes;
+recording UI consumes immutable service state. No socket or location listener is
+owned by a composable. Hilt is not necessary for this small composition root.
 
-Dependency direction: Compose screens → ViewModel → injected source contracts
-→ implementations. Core never imports Android or UI types. Source streams use
-coroutines/Flow. UI consumes immutable StateFlow through lifecycle-aware collection.
-The application composition root supplies dependencies by constructor injection;
-introduce Hilt when services/repositories justify the additional code generation.
+Acquisition: RFCOMM or adapter-specific BLE → serialized ElmProtocol → per-ECU
+capabilities → prioritized PID polling → VehicleSample. Real Android GPS and
+simulated trajectories implement the same LocationSource. Vehicle/GPS run as
+independent collectors; combined mode can retain GPS if OBD exhausts retries.
 
-The activity owns a SimulationViewModel that injects a monotonic clock into the
-simulated VehicleSource. A shared VehicleTelemetryRepository keeps one collector
-and one latest sample, with explicit stopped/running/error states. The dashboard
-collects UI StateFlow with lifecycle awareness. Demo fault controls stay in the
-simulation layer; ordinary gauges consume the same strongly typed sample model
-that physical sources will supply. The basic alert engine uses explicit rules,
-hold times and hysteresis without real-vehicle threshold defaults.
+RecordingService starts only from the foreground UI, declares appropriate service
+types, posts a stop action, and persists independent source timestamps through a
+256-row channel. One IO writer writes batches of up to 64. Producers suspend when
+full; cancellation closes the queue and drains accepted samples before finalizing.
+Process death leaves RECORDING rows; next application startup marks them
+INTERRUPTED. No claim is made that a killed process resumes acquisition.
 
-Vehicle and location sources remain independent. Both real and simulated sources
-will implement the same contracts. No source invents a missing value. Sensor
-readings carry status, source, canonical units, and monotonic acquisition time.
-Wall-clock time is reserved for human-readable session metadata.
+Room schema v1 stores tracks, profiles, sessions and typed JSON sample/event rows,
+with cascading session deletion and an index on session/time. Track/settings
+snapshots preserve the recording configuration. Schema export is committed.
+There is no destructive migration fallback. DataStore stores per-profile layouts,
+units, explicit warning settings and optional map/search endpoints.
 
-Future boundaries:
+GPS timing is independent of tiles and OBD. Valid finite crossings interpolate
+monotonic time. Only valid ordered laps contribute to best/theoretical times.
+Source quality and acquisition timestamps remain explicit. Generic OBD cannot
+manufacture discrete oil-pressure or gear information.
 
-- OBD: transport → serialized ELM protocol → parser → capability discovery → polling.
-- Vehicles: generic capabilities with verified manufacturer providers; BMW is a profile.
-- GPS: source → quality filtering → local metric geometry → lap/sector state machine.
-- Tracks: Room repository, MapLibre viewer/editor, versioned JSON import/export.
-- Telemetry: bounded recording, Room storage, alerts, analysis, Storage Access Framework export.
-- Simulation: deterministic vehicle/GPS trajectories through production processing paths.
+Analysis scans Room pages, computes exact maxima and bounds chart/path samples to
+2,000 per series; the last 200 warning events are displayed. CSV pages stream to
+SAF output. Charts break across substantial measurement gaps and lap comparisons
+use elapsed time, not an implied distance alignment.
 
-Map tiles, Bluetooth connectivity, and vehicle profiles must never be prerequisites
-for GPS timing. UI cannot access sockets, database handles, or location listeners.
-Room, DataStore, MapLibre, and hardware libraries are added alongside their first
-functional feature rather than as unused foundation dependencies.
+MapView owns and releases its native lifecycle with its Compose destination.
+Gate/trace geometry renders with a local style even when provider tiles are absent.
+Search and package import are explicit user actions; no provider credentials or
+public tile scraping are built into the app.

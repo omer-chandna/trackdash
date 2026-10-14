@@ -1,52 +1,37 @@
 # Testing
 
-Use JDK 17, the committed Gradle wrapper, and Android SDK 37. First-time resolution
-requires network access. Do not substitute test results for physical verification.
+Use JDK 17, the committed wrapper and Android SDK 37. First dependency resolution
+requires network. Local checks are not substitutes for physical validation.
 
 ```powershell
 .\gradlew.bat :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
-# With an emulator/device already booted:
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-Linux/macOS: replace `.\gradlew.bat` with `./gradlew`. The GitHub Actions workflow
-runs build checks and a separate Android 10/API 29 emulator job on PRs, main pushes,
-or manual dispatch. Workflow execution on GitHub is not verified until published.
+Linux/macOS use `./gradlew`. GitHub Actions builds/tests/lints and runs an API 29
+emulator job on main pushes and PRs. Remote CI status must be checked separately.
 
-## Foundation coverage
+## Integrated coverage
 
-- Seven JVM tests: operating-mode source independence, unavailable values,
-  finite measurements, unsupported states, stale timestamps, invalid GPS fixes,
-  and separation of wall-clock from monotonic acquisition time.
-- Three Compose instrumented tests: all destinations and back navigation;
-  selected mode after navigation/recreation; landscape navigation and selection.
-- Debug APK and test APK compilation; Android lint.
+The JVM suite contains 51 tests: telemetry validation, replay/fault/lifecycle
+behavior, repository cancellation, alert hysteresis/holds/missing values, finite
+geometry, monotonic timestamp/gap handling, lap/sector validity, track JSON,
+standard PID formulas and discovery, CAN VIN sequence/length, bounded fragmented
+responses, read-only command policy, CSV escaping and spreadsheet text handling.
 
-The original ten tests passed locally on 2026-10-08, with the device tests on an Android 10
-x86_64 Pixel 2 emulator using WHPX. Emulator launch was verified. Target API 37
-runtime behavior and physical devices have not been tested.
+Android tests run on the API 29 x86_64 Pixel 2 emulator with WHPX. Coverage includes:
 
-## Simulation validation
+- Room track/session/sample paging, recovery and cascade deletion.
+- Combined recording in background, valid simulated lap and low-pressure warning,
+  drained writes on stop, and exported source/timestamp metadata.
+- Long GPS-only analysis: exact maxima and bounded chart/path storage.
+- Track editing/reuse, navigation/recreation, simulation controls and warning edits.
+- Active recording landscape layout and selecting modes by their full row.
 
-The suite now has **29 JVM tests** (24 core + 5 app ViewModel) and **7 instrumented
-tests** (3 foundation + 4 simulation), all passing locally on 2026-10-08.
-Simulation coverage includes deterministic replay, faults, cancellation, idempotent
-start, restart, source errors, hold/hysteresis rules, unknown/stale data, live
-updates, limit editing, rotation/recreation, and background shutdown.
-Debug build and lint passed; the latest lint report says no issues found.
-Portrait/landscape captures were visually inspected after compacting the landscape
-controls so all eight gauge tiles fit on the test phone at default text size.
+The last added UI test exposed a label-selection bug which was fixed before the
+final rerun. Reports and final result counts are in the integration review.
 
-ViewModel coroutine tests clear the ViewModelStore inside the runTest block before
-its scheduler drains; teardown afterward is too late for an endless source stream.
-
-Reports: `core/build/reports/tests/test/`, `app/build/reports/androidTests/connected/`,
-and `app/build/reports/lint-results-debug.html`. Build artifacts are ignored by Git.
-
-## Local toolchain
-
-This workstation initially had no Java/Android tools on PATH. A checksum-verified
-Temurin 17 JDK, SDK, and Gradle were installed under ignored `.tools/`. For reuse:
+## Toolchain on this workstation
 
 ```powershell
 $env:JAVA_HOME = (Get-ChildItem .tools/jdk -Directory | Select-Object -First 1).FullName
@@ -56,17 +41,14 @@ $env:ANDROID_USER_HOME = "$PWD/.tools/android-user"
 $env:ANDROID_AVD_HOME = "$PWD/.tools/avd"
 ```
 
-The current Android CLI uses slash-separated SDK package names, for example
-`android --no-metrics --sdk=<path> sdk install platforms/android-37.0 build-tools/36.0.0`.
-Legacy sdkmanager syntax may use semicolons. The project does not require these
-local paths; use Android Studio or a normal SDK installation on other machines.
+All tool downloads, SDK, AVDs and build artifacts are ignored. On Windows use
+`--no-watch-fs`; if incremental resource/lint output is stale, clean app once.
+Reports: core/build/reports/tests/test, app/build/reports/tests/testDebugUnitTest,
+app/build/reports/androidTests/connected, app/build/reports/lint-results-debug.html.
 
-If Windows resource moves leave stale incremental resource/lint output, run
-`gradlew.bat :app:clean :app:lintDebug :app:assembleDebug --no-watch-fs`.
+## Release gates requiring hardware
 
-## Future hardware checklist
-
-Verify permission denial/revocation, Bluetooth fragmentation/disconnect/reconnect,
-per-ECU capabilities, real update rates, GNSS accuracy/dropouts, long sessions,
-screen rotation/backgrounding, storage recovery, export and battery/thermal behavior.
-No physical OBD, BMW, BLE, GNSS or recording tests have been performed.
+Current-Android permission denial/revocation and service timeout behavior; Veepeak
+pairing/disconnect/retry and per-ECU support; CX GATT pairing/fragmentation/recovery;
+outdoor GNSS quality/crossings; prolonged offline recording, low storage,
+battery/thermal behavior and provider-package coverage on target phones.

@@ -1,14 +1,22 @@
-# GPS timing design constraints
+# GPS timing
 
-Foundation includes validated WGS84 fixes with independent wall-clock and monotonic
-timestamps. Acquisition and timing algorithms are not implemented yet.
+Android's GPS provider supplies WGS84 coordinates, accuracy, optional altitude,
+speed/bearing, wall time and elapsed-realtime nanoseconds. Simulation uses the
+same source contract and timing engine. Requested 5 Hz is not a guarantee that a
+phone delivers that rate; Diagnostics reports observed delivery intervals.
 
-Planned engine: filter fix accuracy/age/order/jumps, transform movement and gates
-to local metric coordinates, intersect finite segments, validate direction, and
-interpolate monotonic crossing time. First accepted start/finish crossing starts
-a lap; the next completes it. Enforce cooldown, minimum duration/distance and
-ordered sectors. Large GPS gaps must invalidate questionable timing rather than
-create falsely precise crossings. Keep validity and quality metadata.
+The engine uses a local metric projection with longitude wrapping, finite segment
+intersection, direction checking, and monotonic timestamp interpolation. The
+first accepted start/finish crossing starts timing; the next completes a lap.
+Defaults: accuracy <=25 m, maximum gap 3 s, plausible movement <=100 m/s,
+minimum lap 5 s and 100 m, crossing cooldown 3 s. Gates are 1–500 m and coordinates
+are constrained to ±85° latitude. Up to 12 ordered sectors are supported.
 
-Phone GNSS delivery rates vary. Interpolation cannot remove positional uncertainty.
-TrackDash is supplemental equipment for closed-course use, not certified timing.
+Poor fixes/gaps/jumps invalidate the current lap. Timestamps must remain strictly
+increasing even across a signal gap. Invalid laps remain in history and cannot
+become best lap or best sector. Theoretical best combines best valid sectors.
+
+Recording rejects fixes older than 3 s for timing and exposes accuracy, age,
+observed rate and rejected fixes. A signal dropout breaks the timing segment.
+Timing is not a position-accuracy guarantee: interpolation cannot remove GNSS
+uncertainty. TrackDash is supplemental closed-course equipment, not certified timing.

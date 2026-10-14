@@ -1,39 +1,41 @@
 # Roadmap
 
-This is the authoritative status record. Unmerged work remains IN_REVIEW even
-after implementation and validation. COMPLETED requires approved integration.
-The owner authorized continued local commits to main on 2026-10-08. Future branch
-names below are suggested feature scopes, not a requirement to ask again to integrate.
+Authoritative status as of 2026-10-14. The owner authorized direct incremental
+commits to main and a final push. COMPLETED below means the stated software scope
+is integrated and tested; physical verification is listed separately. This is a
+development build, not a claim that every hardware/release acceptance gate passed.
 
-| Feature | Status | Branch | Dependencies | Acceptance criteria / tests | Blockers |
-|---|---|---|---|---|---|
-| Project foundation | COMPLETED | main (from feature/project-foundation) | Initial main | Debug build/launch, dark shell, navigation, source contracts; 7 JVM + 3 emulator tests pass; lint 0 errors; CI configured | GitHub CI not yet executed |
-| Vehicle simulation | COMPLETED | main (owner-authorized) | Foundation | Deterministic source; start/stop; scenarios; replay/cancellation/repository tests; visible labels | GPS simulation and recording are separate future work |
-| Simulation dashboard | COMPLETED | main (owner-authorized) | Simulation | Live RPM/gear/temperature/status; 7 total emulator tests including fault/rotation/background; screenshots | Hardware sources not implemented |
-| Basic simulation warnings | COMPLETED | main (owner-authorized) | Sources/dashboard | Editable demo thresholds; duration/hysteresis, missing values, low pressure/disconnect; 8 engine + 5 ViewModel tests | Demo defaults are not vehicle guidance |
-| Full vehicle alert system | NOT_STARTED | feature/alert-engine | Basic warnings, physical sources, persistence | Persistent enable/limits, stale/lost GPS/RPM rules, audible alerts and event history | Verified thresholds or user configuration; source integration |
-| GPS source/quality | NOT_STARTED | feature/gps-location | Foundation | Offline fixes, monotonic time, age/rate/quality; dropout tests | Runtime permission/device checks |
-| Gate geometry | NOT_STARTED | feature/gps-gate-crossing | Core models | Finite intersections, direction, interpolation, invalid/jump/accuracy tests | Foundation integration |
-| Lap timing | NOT_STARTED | feature/lap-timing | Geometry | First crossing starts; next completes; duplicate/minimum duration/distance tests | Prior integration |
-| Sector timing | NOT_STARTED | feature/sector-timing | Lap timing | Ordered gates, missing gates, valid best/theoretical times | Prior integration |
-| Track library | NOT_STARTED | feature/track-library | Foundation | Room save/load and migration tests | Prior integration |
-| Maps | NOT_STARTED | feature/map-integration | Tracks | MapLibre lifecycle and licensed offline packages | Map source selection |
-| Gate editor | NOT_STARTED | feature/track-editor | Maps/geometry | Tap endpoints, direction, sectors, save and reuse | Prior integration |
-| Track sharing | NOT_STARTED | feature/track-sharing | Tracks | Versioned JSON validation/round-trip tests | Prior integration |
-| GPS sessions | NOT_STARTED | feature/gps-session | GPS/timing/tracks | Foreground recording, permission handling, recovery | Device verification |
-| Lap dashboard/storage | NOT_STARTED | feature/lap-persistence | GPS sessions | History, quality, valid best lap; Room/UI tests | Prior integration |
-| Classic transport | NOT_STARTED | feature/bluetooth-transport | Foundation | RFCOMM, fragmented responses, timeout/disconnect tests | Physical adapter |
-| ELM protocol/parser | NOT_STARTED | feature/elm327-protocol | Transport | Initialization, echoes, invalid hex, multiple ECU fixtures | Verified captures |
-| Sensor discovery | NOT_STARTED | feature/sensor-discovery | Protocol | Supported bitmap chains, validation, VIN; tests | Prior integration |
-| Polling | NOT_STARTED | feature/obd-polling | Discovery | Serialized priority/adaptation, latency/stale/rate tests | Physical rate testing |
-| Vehicle profiles | NOT_STARTED | feature/vehicle-profiles | Discovery | Saved vehicles; generic fallback; BMW N52 profile | Prior integration |
-| Combined recording | NOT_STARTED | feature/combined-telemetry | OBD/GPS sessions | Independent timestamps, bounded writes, recovery tests | Prior integration |
-| Analysis | NOT_STARTED | feature/session-analysis | Recording | Statistics, graphs, honest elapsed-time lap comparisons | Prior integration |
-| CSV export | NOT_STARTED | feature/csv-export | Recording | SAF, timestamps/units/sources, escaping tests | Prior integration |
-| Custom dashboards/settings | NOT_STARTED | feature/dashboard-customization | Dashboard/profiles | DataStore preferences, layouts, units, keep-awake | Prior integration |
-| BMW enhanced diagnostics | NOT_STARTED | feature/bmw-n52 | Profiles/OBD | Verified identifiers/scaling/fixtures and hardware status | Protocol evidence |
-| BLE drivers | NOT_STARTED | feature/ble-adapters | Transport | Verified GATT drivers, notifications, recovery tests | Adapter protocol evidence |
-| Release preparation | NOT_STARTED | docs/release-readiness | Integrated features | Reproducible APK, performance, docs and hardware checklist | Owner license/release authorization |
+| Feature | Status | Integration | Acceptance evidence / remaining limits |
+|---|---|---|---|
+| Foundation/navigation/theme/CI | COMPLETED | main | Native Compose, modes, portrait/landscape, pinned build tools and CI |
+| Vehicle simulation/dashboard | COMPLETED | main | Replay/fault/lifecycle tests, explicit simulated labels |
+| GPS geometry and lap/sector timing | COMPLETED | main | Finite directional crossings, interpolation, ordered sectors, invalid/best/theoretical rules; deterministic tests |
+| GPS source and quality | IN_REVIEW | main | Android GPS, age/accuracy/rate/rejection reporting implemented; outdoor physical checks pending |
+| Track library and sharing | COMPLETED | main | Room, v1 JSON, bounded validation, copy-on-import, emulator save/edit test |
+| Map and gate editor | COMPLETED | main | MapLibre lifecycle, two-endpoint draw/redraw, direction/sector ordering, configured search |
+| Offline maps | IN_REVIEW | main | Local geometry always works; licensed offline database import implemented; provider package coverage not hardware-tested |
+| GPS/OBD/combined recording | COMPLETED | main | Foreground service, bounded writer, snapshots, recovery; combined background/lap/warning/export emulator test |
+| Standard OBD protocol/discovery | COMPLETED | main | PID formulas/capabilities per ECU, framing and CAN VIN fixtures; no enhanced commands assumed |
+| Classic Bluetooth | IN_REVIEW | main | RFCOMM, cancel/timeout/disconnect/retries, Veepeak Android setup; physical adapter validation pending |
+| Polling | IN_REVIEW | main | Serialized priority intervals, stale status, latency/errors, retry backoff; real throughput and configurable per-PID rates remain follow-up |
+| Vehicle profiles | COMPLETED | main | Saved identities, 2009 BMW N52 preset, detected VIN/capabilities and generic fallback |
+| Dashboard/settings | COMPLETED | main | Per-profile gauge selection/order, numeric/bar display, size, units, keep-awake/fullscreen and shift threshold |
+| Alerts | COMPLETED | main | Explicit per-profile temperature/RPM rules, hold/hysteresis, pressure/disconnect/stale/GPS loss, optional audio and persisted transitions |
+| History/analysis/export | COMPLETED | main | Notes, valid best/average, sectors, bounded charts/path, exact peaks, elapsed-time comparison and paged CSV; regression tests |
+| Simulation recording/fault controls | COMPLETED | main | Pace integration, jump/dropout/vehicle faults, lap/warning persistence and export |
+| BMW enhanced diagnostics | BLOCKED | main evidence register | Exact ECU service identifiers/scaling/captures not verified; oil-pressure switch remains unavailable in generic OBD |
+| BLE compatibility | IN_REVIEW | main | Experimental vendor-documented OBDLink CX driver and scan/recovery; physical validation pending; Veepeak uses Classic |
+| Release preparation | IN_PROGRESS | main | Build/tests/docs/screenshots prepared; physical/current-Android/performance gates and owner license decision pending |
 
-Follow-on phases also include onboarding, connection/vehicle managers, diagnostics,
-fault-injection controls, simulation recording/export, and expanded hardware tests.
+## Remaining acceptance work
+
+- Exercise Veepeak OBDCheck BLE with the owner's 2009 128i: pairing, ECU selection,
+  supported PIDs, oil-temperature availability, real rates and disconnect recovery.
+- Validate enhanced BMW identifiers with protocol evidence and read-only captures
+  before adding a provider; commercial-app support is not sufficient evidence.
+- Qualify the experimental CX BLE driver with actual hardware and pairing events.
+- Test current Android permission/service timeouts, outdoor GNSS, battery/thermal
+  behavior, long sessions, and licensed offline packages on target phones.
+- Expand per-PID polling configuration and additional simulation trajectories/drift
+  after measured source behavior. Current simulation is the demo circuit only.
+- Select a project license and complete release qualification before publishing a release.
