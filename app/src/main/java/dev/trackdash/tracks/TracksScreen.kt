@@ -76,6 +76,7 @@ private fun TrackEditor(id: String, onDone: () -> Unit) {
     val dao = (context.applicationContext as TrackDashApplication).database.dao()
     val scope = rememberCoroutineScope()
     var name by rememberSaveable(id) { mutableStateOf("New circuit") }
+    val style by remember { Preferences(context.applicationContext).mapStyle }.collectAsStateWithLifecycle("")
     var gatesJson by rememberSaveable(id) { mutableStateOf<String?>(null) }
     var gates by remember { mutableStateOf(emptyList<TimingGate>()) }
     var center by remember { mutableStateOf(GeoPoint(43.0, -79.0)) }
@@ -85,6 +86,7 @@ private fun TrackEditor(id: String, onDone: () -> Unit) {
     var direction by remember { mutableStateOf(CrossingDirection.EITHER) }
     var message by remember { mutableStateOf<String?>(null) }
     var drawing by remember { mutableStateOf(false) }
+    var replacing by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(id) {
         val track = gatesJson?.let { TrackJson.decode(it) } ?: dao.track(id)?.let { TrackJson.decode(it.json) }
         track?.let { name = it.name; gates = listOf(it.startFinish) + it.sectors; center = it.startFinish.start; latitude = center.latitude.toString(); longitude = center.longitude.toString() }
@@ -93,25 +95,30 @@ private fun TrackEditor(id: String, onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Timing gate editor", style = MaterialTheme.typography.headlineMedium)
         OutlinedTextField(name, { name = it.take(120) }, label = { Text("Track name") })
+        CircuitSearch { point -> center = point; latitude = point.latitude.toString(); longitude = point.longitude.toString() }
         Row { OutlinedTextField(latitude, { latitude = it }, label = { Text("Latitude") }, modifier = Modifier.weight(1f)); OutlinedTextField(longitude, { longitude = it }, label = { Text("Longitude") }, modifier = Modifier.weight(1f)) }
         TextButton(onClick = { runCatching { center = GeoPoint(latitude.toDouble(), longitude.toDouble()) }.onFailure { message = "Enter valid coordinates" } }) { Text("Go to coordinates") }
-        CircuitMap(gates, center, Modifier.fillMaxWidth().height(300.dp)) { point ->
+        CircuitMap(gates, center, Modifier.fillMaxWidth().height(300.dp), styleUrl = style) { point ->
             if (drawing) {
                 val start = first
                 if (start == null) { first = point; message = "Tap the second endpoint" }
                 else runCatching {
                     val gate = TimingGate(UUID.randomUUID().toString(), if (gates.isEmpty()) "Start / Finish" else "Sector ${gates.size}", start, point, direction)
-                    gates = gates + gate; first = null; drawing = false; message = "Gate added"
+                    val replacement = replacing
+                    gates = if (replacement == null) gates + gate else gates.toMutableList().also { it[replacement] = gate.copy(id = it[replacement].id, name = it[replacement].name) }
+                    first = null; replacing = null; drawing = false; message = "Gate saved"
                 }.onFailure { message = "Gate must be 1–500 m long" }
             }
         }
         Text("Map background is offline. Gates work without map tiles. Endpoint order defines the crossing direction.")
         CrossingDirection.entries.forEach { value -> FilterChip(direction == value, { direction = value }, { Text(value.name.replace('_', ' ')) }) }
-        Button(enabled = gates.size < 13, onClick = { drawing = !drawing; first = null; message = if (drawing) "Tap two endpoints across the circuit" else "Drawing cancelled" }) { Text(if (drawing) "Cancel drawing" else if (gates.isEmpty()) "Draw start / finish" else "Draw sector gate") }
+        Button(enabled = gates.size < 13 || drawing, onClick = { drawing = !drawing; first = null; replacing = null; message = if (drawing) "Tap two endpoints across the circuit" else "Drawing cancelled" }) { Text(if (drawing) "Cancel drawing" else if (gates.isEmpty()) "Draw start / finish" else "Draw sector gate") }
+        first?.let { Text("First endpoint: %.6f, %.6f".format(it.latitude, it.longitude)) }
         message?.let { Text(it) }
         gates.forEachIndexed { index, gate ->
             Text("${index + 1}. ${gate.name} · ${gate.direction}")
             Row {
+                TextButton(onClick = { replacing = index; first = null; drawing = true; direction = gate.direction; message = "Tap two replacement endpoints" }) { Text("Redraw") }
                 TextButton(onClick = { gates = gates.toMutableList().also { it[index] = gate.copy(direction = CrossingDirection.entries[(gate.direction.ordinal + 1) % 3]) } }) { Text("Direction") }
                 if (index > 1) TextButton(onClick = { gates = gates.toMutableList().also { java.util.Collections.swap(it, index, index - 1) } }) { Text("Move up") }
                 TextButton(onClick = { gates = if (index == 0) emptyList() else gates.filterIndexed { i, _ -> i != index } }) { Text("Remove") }
