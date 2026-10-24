@@ -4,7 +4,7 @@ Use JDK 17, the committed wrapper and Android SDK 37. First dependency resolutio
 requires network. Local checks are not substitutes for physical validation.
 
 ```powershell
-.\gradlew.bat :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+.\gradlew.bat :core:test :app:testDebugUnitTest :app:verifyOpenSourceInventory :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
@@ -13,7 +13,7 @@ emulator job on main pushes and PRs. Remote CI status must be checked separately
 
 ## Integrated coverage
 
-The JVM suite contains 61 tests (46 core, 15 app): telemetry validation, replay/fault/lifecycle
+The combined monitoring/open-source candidate contains 100 JVM tests (77 core, 23 app): telemetry validation, replay/fault/lifecycle
 behavior, repository cancellation, alert hysteresis/holds/missing values, finite
 geometry, monotonic timestamp/gap handling, lap/sector validity, track JSON,
 standard PID formulas and discovery, CAN VIN sequence/length, bounded fragmented
@@ -33,6 +33,25 @@ Android tests run on the API 29 x86_64 Pixel 2 emulator with WHPX. Coverage incl
   and non-flashing connectivity/data-quality messages.
 - Icon-only landscape/portrait navigation, advanced Connection Status, detail Back
   controls, confirmation/cancellation for session deletion, and continuing active recording after Back.
+- GPS acquisition failure/recovery without stopping vehicle capture, injected full
+  storage without false Saved status, invalid threshold Save protection and explicit
+  not-monitored setup status.
+- Read-only session replay and restored detail selection, encrypted sharing credential
+  storage, packaged runtime notices and offline license-viewer Back behavior.
+
+## Monitoring/open-source verification (2026-10-24)
+
+The combined candidate passed 77 core and 23 app JVM tests, all 26 API 29 Android
+tests, lint (zero errors/warnings), debug APK assembly and the attribution check
+for 97 resolved runtime coordinates. The complete Android suite was rerun after
+fixing replay/detail restoration; selected visual tests were rerun directly to
+retain synthetic screenshots. The functional PR has 24 Android tests; the
+independent licensing PR adds two attribution tests to main's existing suite.
+
+Use the actual PR checks for branch-specific results. New features remain
+IN_REVIEW until merged. Physical car/adapter, current Android, outdoor GNSS,
+long-run behavior, real receiver/TLS/mobile networks and production signing were
+not validated by these emulator/unit checks. Historical rally verification follows.
 
 ## Final rally-refresh verification (2026-10-24)
 

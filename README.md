@@ -1,8 +1,16 @@
 # TrackDash
 
-Native Android motorsport telemetry and GPS lap timing. Android 10+ (API 29),
+Open-source, local-first Android performance monitoring and GPS lap timing for manual cars.
+No account or cloud service is required. Android 10+ (API 29),
 compile/target API 37. Version 0.3 integrates simulation, GPS timing, track editing,
 foreground recording, standard OBD, analysis, and local export.
+
+![Landscape rally dashboard](docs/screenshots/rally-demo-landscape.png)
+
+**Development software, not an engine-protection system.** TrackDash supplements,
+never replaces, the vehicle's instruments and factory warnings. Configure and
+operate it only while stationary. Hardware compatibility and outdoor timing must
+be checked on your own setup; no physical vehicle is currently certified.
 
 ## Build and install
 
@@ -10,7 +18,7 @@ Use JDK 17 and Android SDK API 37 (`platforms/android-37.0`), build tools 36.0.0
 Set `ANDROID_HOME` or an ignored `local.properties` with `sdk.dir`.
 
 ```powershell
-.\gradlew.bat :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+.\gradlew.bat :core:test :app:testDebugUnitTest :app:verifyOpenSourceInventory :app:lintDebug :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -50,14 +58,33 @@ Home, Tracks, and Sessions use an icon rail in landscape and an icon-only bottom
 bar in portrait. Connection Status is available through **Settings → Maps & advanced**.
 Back leaves an active recording running; **Stop and save** explicitly ends it.
 
-## Connect the owner's Veepeak OBDCheck BLE
+## Discover your car's standard OBD-II sensors
+
+Park safely, turn Simulation off in recording setup, choose your paired adapter
+and vehicle profile, and run sensor discovery. Review the responding ECUs,
+available sensors, missing sensors, and readiness panel before starting. Discovery
+reports advertised support, not proof of sensor accuracy or useful update rates.
+A saved vehicle name never implies sensor support. No manufacturer limits are assumed.
+
+Only standard read-only OBD-II is in scope: no fault-code repair tools, fault clearing,
+coding, actuation, or proprietary sensor guesses. Generic OBD-II does not provide
+a discrete low-oil-pressure switch; an unavailable sensor is not a healthy one.
+See the [compatibility matrix and report guide](docs/vehicle-compatibility.md).
+
+### Veepeak OBDCheck BLE on Android
 
 1. Plug the adapter into the stationary vehicle and turn on ignition.
 2. Pair **VEEPEAK** in Android Bluetooth settings; the vendor specifies PIN **1234**.
 3. In TrackDash, choose Vehicle dashboard or Combined telemetry, open recording
    setup, turn Simulation off, and load paired Classic adapters.
 4. Select VEEPEAK and a vehicle profile. For combined mode, also select a track.
-5. Grant the requested Bluetooth/location permissions, then start recording.
+5. Grant permissions, then choose **Discover available sensors** while stationary.
+   Inspect each ECU's advertised support and actual decoded readings. A saved
+   model name or cached check is not evidence that a sensor is available now.
+6. Review **Monitoring readiness**, configure your own limits in Settings, then
+   start recording. Checks expire after two minutes; recording checks again.
+   A known different VIN cannot silently replace a profile or reuse its limits.
+   When VIN is unavailable, confirm the selected profile yourself.
 
 [Veepeak's Android instructions](https://veepeak.com/pages/obdcheck-ble) use Classic
 Bluetooth even though the product name includes BLE. Only read-only standard
@@ -104,11 +131,36 @@ confirmation is required, and active recordings cannot be deleted.
 
 JVM tests, Android 10 emulator tests, lint and debug builds are documented in
 [testing](docs/testing.md). This is a development build, not a hardware-qualified
-release. Proprietary enhanced commands require verified ECU identifiers and
-captures for each supported vehicle; they are deliberately not guessed. Modern-device foreground-service,
+release. Proprietary enhanced commands, repair/fault-code operations and vehicle
+writes are out of scope. Modern-device foreground-service,
 Bluetooth, GNSS accuracy, thermal/battery and long-run tests remain release gates.
 See [roadmap](docs/roadmap.md), [limitations](docs/known-limitations.md),
 [architecture](docs/architecture.md), and [integration review](docs/reviews/integrated-telemetry.md).
 
-Contributions follow [CONTRIBUTING.md](CONTRIBUTING.md). The owner has not selected
-an open-source license; no release is published by this development push.
+## Replay and optional sharing
+
+Use local, read-only [session replay](docs/session-replay.md) to investigate a
+saved recording without connecting to a vehicle. Original sample timestamps and
+availability are retained; replay never writes a new session or shares packets.
+
+Optional [sensor-only HTTPS sharing](docs/telemetry-sharing.md) is off by default
+and sends a fixed allowlisted packet to a receiver you control. It excludes GPS
+coordinates, VIN, wall-clock time, session/vehicle identifiers, track names and
+notes. The receiver still sees network IP. A slow or unavailable receiver never
+blocks local recording. No project-operated cloud backend is provided.
+
+CSV and track exports are not anonymous: they can contain exact locations and
+personal notes. Inspect and redact files before posting. See [Privacy](PRIVACY.md).
+
+## Contributing and license
+
+Start with [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), and the
+[release checklist](docs/release-checklist.md). `core` is platform-independent
+telemetry/protocol logic; `app` supplies Android hardware, persistence, recording
+and UI. Small tested changes and sanitized protocol fixtures are welcome.
+
+Copyright 2026 Omer Chandna and TrackDash contributors. Source and documentation
+are licensed under [Apache-2.0](LICENSE), unless a file states otherwise.
+Third-party components retain their own licenses; see
+[third-party notices](THIRD_PARTY_NOTICES.md). Provider data is not relicensed by
+this project. Debug APKs are not signed production releases.

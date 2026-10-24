@@ -21,6 +21,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/openSourceAssets").get().asFile)
 }
 kotlin { jvmToolchain(17) }
 
@@ -51,3 +52,5 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+apply(from = rootProject.file("gradle/open-source-notices.gradle.kts"))

@@ -21,6 +21,9 @@ class FoundationNavigationTest {
         compose.onNodeWithText("Session history").assertIsDisplayed()
         compose.onNodeWithContentDescription("Home").performClick()
         compose.onNodeWithText("Vehicles & settings").performClick()
+        compose.onNodeWithText("About & open-source licenses").performScrollTo().performClick()
+        compose.onNodeWithText("TrackDash 0.3").assertIsDisplayed()
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("Connection status").performScrollTo().performClick()
         compose.onNodeWithText("Vehicle data").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()

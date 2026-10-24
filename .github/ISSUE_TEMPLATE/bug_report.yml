@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible app or monitoring problem without private data.
+body:
+  - type: markdown
+    attributes:
+      value: "For security issues, follow SECURITY.md. Never post VINs, Bluetooth addresses, exact routes, personal notes, tokens, or unredacted CSV/logs. Do not induce dangerous faults on a real vehicle."
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone model and Android version
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Prefer simulation or a small sanitized fixture. Include mode, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and sensor context, if applicable
+      description: Adapter model, vehicle model/year, relevant sensor, and availability status. No identifiers or raw captures.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Review screenshots and files before attaching. State whether this was simulated, an emulator, or physical hardware.

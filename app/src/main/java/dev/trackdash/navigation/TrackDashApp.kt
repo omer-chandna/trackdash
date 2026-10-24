@@ -95,7 +95,11 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                     composable("settings") { SettingsScreen(
                         onBack = { nav.popBackStack() },
                         onConnectionStatus = { nav.navigate("connection-status") },
+                        onOpenSource = { nav.navigate("open-source") },
                     ) }
+                    composable("open-source") {
+                        dev.trackdash.settings.AboutOpenSourceScreen(onBack = { nav.popBackStack() })
+                    }
                     composable("connection-status") {
                         dev.trackdash.recording.ConnectionStatusScreen(onBack = { nav.popBackStack() })
                     }
