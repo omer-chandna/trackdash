@@ -1,0 +1,32 @@
+name: OBD-II compatibility report
+description: Share measured hardware results, not a general claim that every sensor works.
+body:
+  - type: markdown
+    attributes:
+      value: "Use docs/compatibility-report-template.md. Sensor discovery reports are local exports; inspect them before attaching. A sensor bitmap is not proof of accuracy or sustained update rate."
+  - type: input
+    id: setup
+    attributes:
+      label: Vehicle model/year, adapter model, phone/Android, app commit
+      description: Omit VIN, registration, Bluetooth address, and personal details.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Sensor results and actual measured rates
+      description: List available, no-data, unknown, and unsupported sensors. State test duration and how rates were measured; leave untested items pending.
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Reconnect, background, GPS, and long-run checks
+      description: Report only checks actually performed. Never induce overheating or low oil pressure.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy review
+      options:
+        - label: I reviewed attachments for identifiers, coordinates, credentials, and personal data.
+          required: true

@@ -1,0 +1,11 @@
+TrackDash
+Copyright 2026 Omer Chandna and TrackDash contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Third-party components retain their own licenses and notices. See
+THIRD_PARTY_NOTICES.md and licenses/. These files are also bundled in APK
+assets under opensource/.
+
+TrackDash is an independent project, not affiliated with or endorsed by
+vehicle, adapter, map-provider, Android, or library vendors.

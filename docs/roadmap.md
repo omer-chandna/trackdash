@@ -1,8 +1,8 @@
 # Roadmap
 
 Authoritative status as of 2026-10-24. COMPLETED below describes software already
-integrated on main; the rally refresh is submitted separately for review and
-remains IN_REVIEW until approved integration. Physical verification is listed
+integrated on main, including rally refresh PR #1. The monitoring/open-source
+milestone remains IN_REVIEW until its PRs are approved and integrated. Physical verification is listed
 separately. This is a development build, not a claim that hardware/release gates passed.
 
 | Feature | Status | Integration | Acceptance evidence / remaining limits |
@@ -23,31 +23,45 @@ separately. This is a development build, not a claim that hardware/release gates
 | Alerts | COMPLETED | main | Explicit per-profile temperature/RPM rules, hold/hysteresis, pressure/disconnect/stale/GPS loss, optional audio and persisted transitions |
 | History/analysis/export | COMPLETED | main | Notes, valid best/average, sectors, bounded charts/path, exact peaks, elapsed-time comparison and paged CSV; regression tests |
 | Simulation recording/fault controls | COMPLETED | main | Pace integration, jump/dropout/vehicle faults, lap/warning persistence and export |
-| Enhanced manufacturer sensors | BLOCKED | protocol evidence | Exact ECU service identifiers/scaling/captures are not verified; oil-pressure switch remains unavailable in generic OBD |
+| Enhanced manufacturer sensors / repair operations | OUT_OF_SCOPE | owner scope | Standard read-only OBD-II only; oil-pressure switch remains unavailable in generic OBD |
 | BLE compatibility | IN_REVIEW | main | Experimental vendor-documented OBDLink CX driver and scan/recovery; physical validation pending; Veepeak uses Classic |
-| Release preparation | IN_PROGRESS | main | Build/tests/docs/screenshots prepared; physical/current-Android/performance gates and owner license decision pending |
+| Release preparation | IN_PROGRESS | main + review | Apache-2.0 approved; attribution/software qualification in review; physical/current-Android/performance and signing gates remain |
 
-## Rally refresh awaiting integration
+## Rally refresh integrated
 
-Branch: `codex/rally-dashboard-warning-manager`. Review notes and screenshots:
+Merged through PR #1. Review notes and screenshots:
 [rally dashboard refresh](reviews/rally-dashboard-refresh.md).
 
 | Feature | Status | Acceptance evidence / remaining limits |
 |---|---|---|
-| Rally display and manual-car focus | IN_REVIEW | Large adaptive white-on-black readings, 12 RPM lights, explicit configured redline, SHIFT pulses/hysteresis; no gear UI |
-| Sequential engine warnings | IN_REVIEW | Three-pulse cycles per activation, pressure priority, queue clear/recurrence, saved rotation state, connectivity exclusion, safety-before-SHIFT tests |
-| Landscape navigation and detail flows | IN_REVIEW | Fixed icon rail, portrait bottom navigation, advanced Connection Status, visible/system Back and continuing foreground recording |
-| Session deletion and neutral vehicle profiles | IN_REVIEW | Conditional DAO deletion, confirmation/cascade tests, active-session protection, exact legacy preset cleanup preserving user profiles |
+| Rally display and manual-car focus | COMPLETED | Large adaptive white-on-black readings, 12 RPM lights, explicit configured redline, SHIFT pulses/hysteresis; no gear UI |
+| Sequential engine warnings | COMPLETED | Three-pulse cycles per activation, pressure priority, queue clear/recurrence, saved rotation state, connectivity exclusion, safety-before-SHIFT tests |
+| Landscape navigation and detail flows | COMPLETED | Fixed icon rail, portrait bottom navigation, advanced Connection Status, visible/system Back and continuing foreground recording |
+| Session deletion and neutral vehicle profiles | COMPLETED | Conditional DAO deletion, confirmation/cascade tests, active-session protection, exact legacy preset cleanup preserving user profiles |
+
+## Monitoring and open-source milestone
+
+Functional review: [PR #2](https://github.com/omer-chandna/trackdash/pull/2),
+`codex/monitoring-reliability`. Open-source packaging is reviewed separately on
+`codex/open-source-foundation`; merge the functional PR before completing this
+milestone. Nothing below claims physical hardware or production-release qualification.
+
+| Feature | Status | Acceptance evidence / remaining limits |
+|---|---|---|
+| Monitoring reliability | IN_REVIEW | Independent source recovery, stale-value watchdog, unresolved warnings, validated limits, storage-failure and Back regressions |
+| Standard OBD-II setup | IN_REVIEW | Per-ECU advertised/actual/unknown states, readiness, guarded VIN identity and explicit compatibility export; real hardware pending |
+| Saved-session replay | IN_REVIEW | Read-only bounded playback, preserved timestamps, malformed/gapped samples, Back cancellation; no recording/network |
+| Optional HTTPS sharing | IN_REVIEW | Default off, privacy allowlist, encrypted authorization, bounded non-blocking queue and health counters; real receiver qualification pending |
+| Open-source foundation | IN_REVIEW | Apache-2.0, 97-coordinate attribution inventory, offline license viewer, privacy/security/contribution guidance and compatibility/release gates |
 
 ## Remaining acceptance work
 
 - Exercise a supported Classic Bluetooth adapter with a target vehicle: pairing, ECU selection,
   supported PIDs, oil-temperature availability, real rates and disconnect recovery.
-- Validate any enhanced manufacturer identifiers with protocol evidence and read-only captures
-  before adding a provider; commercial-app support is not sufficient evidence.
 - Qualify the experimental CX BLE driver with actual hardware and pairing events.
 - Test current Android permission/service timeouts, outdoor GNSS, battery/thermal
   behavior, long sessions, and licensed offline packages on target phones.
 - Expand per-PID polling configuration and additional simulation trajectories/drift
   after measured source behavior. Current simulation is the demo circuit only.
-- Select a project license and complete release qualification before publishing a release.
+- Complete the release checklist, owner-controlled signing and physical qualification
+  before publishing a release. The license decision is Apache-2.0.

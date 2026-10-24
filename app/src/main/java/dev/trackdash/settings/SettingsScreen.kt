@@ -22,7 +22,7 @@ import dev.trackdash.ui.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit, onOpenSource: () -> Unit) {
     val context = LocalContext.current
     val graph = context.applicationContext as TrackDashApplication
     val dao = graph.database.dao()
@@ -92,6 +92,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
     val systemPanel: @Composable () -> Unit = {
         TrackDashPanel {
             SectionTitle("Maps & advanced", "Optional providers and live source health.")
+            OutlinedButton(onClick = onOpenSource, modifier = Modifier.fillMaxWidth()) { Text("About & open-source licenses") }
             OutlinedButton(onClick = onConnectionStatus, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Info, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Connection status")
             }
