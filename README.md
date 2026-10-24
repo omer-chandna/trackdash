@@ -45,7 +45,7 @@ service through navigation, rotation and normal backgrounding.
 Bluetooth even though the product name includes BLE. Only read-only standard
 OBD queries are sent. Sensor availability comes from the responding ECU, not the
 vehicle name. Unsupported oil temperature remains unavailable; oil pressure is
-never fabricated. Physical Veepeak/BMW validation is still required.
+never fabricated. Physical adapter and vehicle validation is still required.
 
 An **experimental OBDLink CX BLE** option uses its documented UART service and
 acknowledged writes. It is not a generic driver for every BLE adapter and has not
@@ -69,7 +69,7 @@ map tiles. Imported packages may lack resources; check coverage before use.
 
 Create vehicle profiles, choose gauges and their order, size and bar presentation,
 units, keep-awake/fullscreen behavior, and warning settings. Temperature/RPM
-thresholds are user supplied; there are no assumed BMW safety limits. Recording
+thresholds are user supplied; there are no assumed manufacturer safety limits. Recording
 snapshots settings at start. Session notes, complete samples, warnings and track
 snapshots stay locally in Room. Android backup is disabled.
 
@@ -82,8 +82,8 @@ canonical units, source and availability status. Stop a session before export.
 
 JVM tests, Android 10 emulator tests, lint and debug builds are documented in
 [testing](docs/testing.md). This is a development build, not a hardware-qualified
-release. Proprietary BMW enhanced commands require verified ECU identifiers and
-captures; they are deliberately not guessed. Modern-device foreground-service,
+release. Proprietary enhanced commands require verified ECU identifiers and
+captures for each supported vehicle; they are deliberately not guessed. Modern-device foreground-service,
 Bluetooth, GNSS accuracy, thermal/battery and long-run tests remain release gates.
 See [roadmap](docs/roadmap.md), [limitations](docs/known-limitations.md),
 [architecture](docs/architecture.md), and [integration review](docs/reviews/integrated-telemetry.md).

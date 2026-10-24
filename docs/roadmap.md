@@ -18,20 +18,20 @@ development build, not a claim that every hardware/release acceptance gate passe
 | Standard OBD protocol/discovery | COMPLETED | main | PID formulas/capabilities per ECU, framing and CAN VIN fixtures; no enhanced commands assumed |
 | Classic Bluetooth | IN_REVIEW | main | RFCOMM, cancel/timeout/disconnect/retries, Veepeak Android setup; physical adapter validation pending |
 | Polling | IN_REVIEW | main | Serialized priority intervals, stale status, latency/errors, retry backoff; real throughput and configurable per-PID rates remain follow-up |
-| Vehicle profiles | COMPLETED | main | Saved identities, 2009 BMW N52 preset, detected VIN/capabilities and generic fallback |
+| Vehicle profiles | COMPLETED | main | Saved user-created identities, detected VIN/capabilities and generic fallback |
 | Dashboard/settings | COMPLETED | main | Per-profile gauge selection/order, numeric/bar display, size, units, keep-awake/fullscreen and shift threshold |
 | Alerts | COMPLETED | main | Explicit per-profile temperature/RPM rules, hold/hysteresis, pressure/disconnect/stale/GPS loss, optional audio and persisted transitions |
 | History/analysis/export | COMPLETED | main | Notes, valid best/average, sectors, bounded charts/path, exact peaks, elapsed-time comparison and paged CSV; regression tests |
 | Simulation recording/fault controls | COMPLETED | main | Pace integration, jump/dropout/vehicle faults, lap/warning persistence and export |
-| BMW enhanced diagnostics | BLOCKED | main evidence register | Exact ECU service identifiers/scaling/captures not verified; oil-pressure switch remains unavailable in generic OBD |
+| Enhanced manufacturer sensors | BLOCKED | protocol evidence | Exact ECU service identifiers/scaling/captures are not verified; oil-pressure switch remains unavailable in generic OBD |
 | BLE compatibility | IN_REVIEW | main | Experimental vendor-documented OBDLink CX driver and scan/recovery; physical validation pending; Veepeak uses Classic |
 | Release preparation | IN_PROGRESS | main | Build/tests/docs/screenshots prepared; physical/current-Android/performance gates and owner license decision pending |
 
 ## Remaining acceptance work
 
-- Exercise Veepeak OBDCheck BLE with the owner's 2009 128i: pairing, ECU selection,
+- Exercise a supported Classic Bluetooth adapter with a target vehicle: pairing, ECU selection,
   supported PIDs, oil-temperature availability, real rates and disconnect recovery.
-- Validate enhanced BMW identifiers with protocol evidence and read-only captures
+- Validate any enhanced manufacturer identifiers with protocol evidence and read-only captures
   before adding a provider; commercial-app support is not sufficient evidence.
 - Qualify the experimental CX BLE driver with actual hardware and pairing events.
 - Test current Android permission/service timeouts, outdoor GNSS, battery/thermal

@@ -18,11 +18,17 @@ class TrackDashApplication : Application() {
         database.dao().recoverInterrupted()
         if (database.dao().track(DemoCircuit.track.id) == null)
             database.dao().saveTrack(TrackRow(DemoCircuit.track.id, DemoCircuit.track.name, TrackJson.encode(DemoCircuit.track)))
-        if (database.dao().vehicle("bmw-n52") == null)
-            database.dao().saveVehicle(VehicleRow("bmw-n52", "BMW 128i · N52", "BMW", "128i E82", 2009, "N52"))
+        removeLegacyVehiclePreset(database.dao())
     } }
     override fun onCreate() { super.onCreate(); ready }
 }
 
 data class SimulationControls(val lapSeconds: Double = 60.0, val gpsDropout: Boolean = false,
     val gpsJump: Long = 0, val vehicleScenario: SimulationScenario = SimulationScenario.NORMAL)
+
+internal suspend fun removeLegacyVehiclePreset(dao: TrackDashDao) {
+    // This exact id belonged to the old bundled manufacturer preset. User-created vehicles use UUIDs.
+    dao.deleteVehicle(LEGACY_VEHICLE_PRESET_ID)
+}
+
+internal const val LEGACY_VEHICLE_PRESET_ID = "bmw-n52"
