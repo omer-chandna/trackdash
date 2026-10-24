@@ -10,7 +10,10 @@ class TracksTest {
     @Test fun savedTrackLoadsItsGatesAndCanBeReusedAfterEditing() {
         compose.onNodeWithContentDescription("Tracks").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Demo circuit").fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodesWithText("Edit").onFirst().performClick()
+        compose.onAllNodesWithText("Edit").onFirst().performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText("Track name") and hasText("Demo circuit")).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Track name").assertTextContains("Demo circuit")
         compose.onNodeWithText("Save track").performScrollTo().performClick()
         compose.onNodeWithText("Demo circuit").assertIsDisplayed()

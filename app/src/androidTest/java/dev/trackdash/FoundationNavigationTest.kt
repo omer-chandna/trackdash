@@ -12,6 +12,13 @@ import org.junit.runner.RunWith
 class FoundationNavigationTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    private fun awaitVehicleMode() {
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasText("Vehicle dashboard") and hasClickAction() and isSelected())
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test fun destinationsShowHonestEmptyStatesAndBackReturnsHome() {
         compose.onNodeWithContentDescription("Tracks").performClick()
         compose.onNodeWithText("Track library").assertIsDisplayed()
@@ -32,12 +39,15 @@ class FoundationNavigationTest {
     }
 
     @Test fun modeSurvivesNavigationAndActivityRecreation() {
-        compose.onNodeWithText("Vehicle dashboard").performClick()
+        compose.onNodeWithText("Vehicle dashboard").performScrollTo().performClick()
+        awaitVehicleMode()
         compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
         compose.onNodeWithContentDescription("Tracks").performClick()
         compose.onNodeWithContentDescription("Home").performClick()
+        awaitVehicleMode()
         compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
         compose.activityRule.scenario.recreate()
+        awaitVehicleMode()
         compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
     }
 
