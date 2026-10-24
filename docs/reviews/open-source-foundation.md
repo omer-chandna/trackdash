@@ -32,6 +32,14 @@ attribution tests verify shipped texts and offline viewer Back behavior. The
 functional branch's tests and the foundation-on-main branch are checked separately
 before handoff; remote CI and hardware qualification are distinct gates.
 
+Standalone foundation on main: 61 JVM tests and 20 API 29 Android tests passed,
+including a repeat of all 20 after scroll/state synchronization corrections.
+Debug assembly and the attribution inventory passed. Lint has zero errors and
+one existing `ModifierParameter` warning in `StatusChip`; the companion functional
+PR fixes that warning, so the combined candidate has no lint issues. CI specifies
+the representative Pixel 2 device rather than assuming the runner's smaller
+default emulator matches the landscape visibility contract.
+
 The complete license text is retained from the
 [Apache Software Foundation](https://www.apache.org/licenses/LICENSE-2.0).
 Native notices are the exact versioned upstream texts linked from
