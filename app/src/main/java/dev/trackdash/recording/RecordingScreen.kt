@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.*
@@ -105,7 +107,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
         TrackDashPanel {
             SectionTitle("Session mode", "Choose the data sources for this run.")
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Switch(simulated, { simulated = it })
+                Switch(simulated, { simulated = it }, modifier = Modifier.semantics { contentDescription = "Simulation source" })
                 Column(Modifier.padding(start = 10.dp)) {
                     Text("Simulation", style = MaterialTheme.typography.titleMedium)
                     Text(if (simulated) "Uses safe synthetic data" else "Uses connected device sources",

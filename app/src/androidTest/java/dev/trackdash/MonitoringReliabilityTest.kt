@@ -63,11 +63,17 @@ class MonitoringReliabilityTest {
 
     @Test fun setupNamesUnmonitoredSensorsBeforeARealConnection() {
         compose.activityRule.scenario.onActivity { it.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        compose.onNodeWithText("Vehicle dashboard").performClick()
+        compose.waitUntil(5_000) {
+            compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        }
+        compose.onNodeWithText("Vehicle dashboard").performScrollTo().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasText("Vehicle dashboard") and hasClickAction() and isSelected()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Set up recording").performClick()
-        compose.onNode(isToggleable()).performClick()
+        compose.onNodeWithContentDescription("Simulation source").performScrollTo().assertIsOn().performClick().assertIsOff()
         compose.onNodeWithText("Monitoring readiness").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Not monitored — unavailable through standard OBD-II").assertExists()
+        compose.onNodeWithText("Not monitored — unavailable through standard OBD-II").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Start recording").performScrollTo().assertIsNotEnabled()
         captureMonitoringPreview(compose.onRoot(), "monitoring-readiness-landscape.png")
     }
