@@ -101,7 +101,7 @@ fun MetricTile(
 }
 
 @Composable
-fun StatusChip(text: String, color: Color = MaterialTheme.colorScheme.primary, modifier: Modifier = Modifier) {
+fun StatusChip(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary) {
     Surface(modifier, shape = MaterialTheme.shapes.extraLarge, color = color.copy(alpha = 0.12f), border = BorderStroke(1.dp, color.copy(alpha = 0.35f))) {
         Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = color,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))

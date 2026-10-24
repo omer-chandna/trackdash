@@ -103,7 +103,11 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                         TracksScreen()
                     }
                     composable(Destination.SESSIONS.name) {
-                        SessionsScreen()
+                        SessionsScreen(onReplay = { id -> nav.navigate("replay/$id") })
+                    }
+                    composable("replay/{sessionId}") { replay ->
+                        dev.trackdash.recording.SessionReplayScreen(requireNotNull(replay.arguments?.getString("sessionId")),
+                            onBack = { nav.popBackStack() })
                     }
                 }
             }

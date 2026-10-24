@@ -33,7 +33,8 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
             val vehicle: @Composable () -> Unit = {
                 TrackDashPanel {
                     SectionTitle("Vehicle data", "Adapter and protocol availability")
-                    StatusChip(state.obd.state.toString(), if (state.obd.errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    StatusChip(if (!state.active) "Inactive · last session information" else state.obd.state,
+                        color = if (state.obd.errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     Text("Transport · ${state.transport}")
                     Text("ECU · ${state.obd.ecu.ifBlank { "—" }}")
                     Text("Protocol · ${state.obd.protocol.ifBlank { "—" }}")
@@ -41,18 +42,24 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                     Text("VIN availability · ${state.obd.vinStatus}")
                     Text("Available sensor IDs · ${state.obd.supported.sorted().joinToString { "%02X".format(Locale.US, it) }.ifBlank { "—" }}", style = MaterialTheme.typography.bodySmall)
                     Text("${state.obd.queries} queries · ${state.obd.latencyMillis} ms last latency · ${state.obd.errors} connection errors", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    state.vehicleError?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
+                    state.obd.discovery?.selected?.let { selected ->
+                        MonitoringReadinessPanel(state.dashboard, selected.supportedSensors,
+                            state.vehicle?.readings?.filter { it.status == dev.trackdash.core.SensorStatus.AVAILABLE }?.map { it.sensorId }?.toSet(), state.simulated,
+                            selected.sensors.filter { it.availability == dev.trackdash.core.obd.ObdSensorAvailability.UNKNOWN }.map { it.sensor }.toSet())
+                    }
                 }
             }
             val gps: @Composable () -> Unit = {
-                val gpsStatus = when { !state.active -> "Inactive"; state.gps == null -> "Acquiring"; (state.gpsAgeSeconds ?: 0.0) > 3 -> "Lost"; state.gps!!.horizontalAccuracyMeters > 25 -> "Degraded"; else -> "Ready" }
+                val gpsStatus = when { !state.active -> "Inactive"; !state.usesGps -> "Not requested"; state.gpsError != null -> "Unavailable · retrying"; state.gps == null -> "Acquiring"; (state.gpsAgeSeconds ?: 0.0) > 3 -> "Lost"; state.gps!!.horizontalAccuracyMeters > 25 -> "Degraded"; else -> "Ready" }
                 TrackDashPanel {
                     SectionTitle("GPS", "Fix quality and delivery rate")
-                    StatusChip(gpsStatus, if (gpsStatus in listOf("Lost", "Degraded")) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+                    StatusChip(gpsStatus, color = if (gpsStatus in listOf("Lost", "Degraded")) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
                     state.gps?.let { fix ->
                         Text("${fix.latitude}, ${fix.longitude} · ${fix.provider}")
                         Text("Accuracy ${fix.horizontalAccuracyMeters} m · Age ${state.gpsAgeSeconds} s")
                         Text("Delivered rate %.1f Hz · ${state.rejectedFixes} rejected fixes".format(state.gpsRateHz))
-                        Text("Speed ${fix.speedMetersPerSecond ?: "—"} m/s · Bearing ${fix.bearingDegrees ?: "—"}°")
+                        Text("Speed ${gpsSpeedForDisplay(state) ?: "—"} m/s · Bearing ${if (gpsStatus == "Ready") fix.bearingDegrees ?: "—" else "—"}°")
                     } ?: Text("No fix is available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -63,6 +70,10 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                     MetricTile("Stored samples", state.samples.toString(), if (state.simulated) "simulation" else "device", Modifier.fillMaxWidth())
                     Text("Database · ${context.getDatabasePath("trackdash.db").length() / 1024} KiB", style = MaterialTheme.typography.bodyMedium)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (state.sharingEnabled) Text("Sharing · ${state.sharingStats.sent} sent · ${state.sharingStats.dropped} dropped · ${state.sharingStats.errors} errors",
+                        style = MaterialTheme.typography.bodySmall)
+                    else Text("Sharing · off", style = MaterialTheme.typography.bodySmall)
+                    state.sharingMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
             TrackDashPage {
@@ -75,7 +86,7 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { gps(); recorder() }
                     }
                 } else { vehicle(); gps(); recorder() }
-                Text("Enhanced sensors and adapter support depend on verified device protocols. Generic OBD may not expose oil temperature or oil-pressure status.",
+                Text("Only standard OBD-II sensors are used. Oil temperature requires advertised support; oil pressure is not monitored. No repair or fault-code commands are sent.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

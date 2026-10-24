@@ -32,8 +32,8 @@ fun LiveGauges(sample: VehicleSample, preferences: DashboardPreferences, alerts:
         RallyReading(reading.sensorId.name.replace('_', ' '), value, unit, critical = safety,
             progress = if (preferences.bars && reading.status == SensorStatus.AVAILABLE)
                 (requireNotNull(reading.value) / maximum).toFloat().coerceIn(0f, 1f) else null)
-    } + if (sample.oilPressure != OilPressureStatus.UNAVAILABLE) listOf(
-        RallyReading("OIL PRESSURE", sample.oilPressure.name,
+    } + if (sample.oilPressure != OilPressureStatus.UNAVAILABLE || alerts.any { it.id == "oil-pressure" }) listOf(
+        RallyReading("OIL PRESSURE", if (sample.oilPressure == OilPressureStatus.UNAVAILABLE) "UNKNOWN" else sample.oilPressure.name,
             critical = alerts.any { it.id == "oil-pressure" && it.category == AlertCategory.ENGINE_SAFETY })
     ) else emptyList()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {

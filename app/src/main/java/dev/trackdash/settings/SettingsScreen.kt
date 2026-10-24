@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.trackdash.core.SensorId
 import dev.trackdash.data.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 import dev.trackdash.ui.*
 
@@ -28,9 +29,15 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
     val vehicles by dao.vehicles().collectAsStateWithLifecycle(emptyList())
     var vehicleId by rememberSaveable { mutableStateOf("") }
     val preferences = remember { Preferences(context.applicationContext) }
-    val persisted by remember(vehicleId) { preferences.dashboard(vehicleId) }.collectAsStateWithLifecycle(DashboardPreferences())
+    val persistedProfile by remember(vehicleId) { preferences.dashboard(vehicleId).map { vehicleId to it } }
+        .collectAsStateWithLifecycle(null)
+    val persisted = persistedProfile?.second ?: DashboardPreferences()
+    val profileReady = persistedProfile?.first == vehicleId
     var draft by remember { mutableStateOf(persisted) }
-    LaunchedEffect(persisted) { draft = persisted }
+    var limits by remember { mutableStateOf(WarningLimitsDraft.from(persisted)) }
+    LaunchedEffect(vehicleId, persistedProfile) {
+        if (profileReady) { draft = persisted; limits = WarningLimitsDraft.from(persisted) }
+    }
     val style by preferences.mapStyle.collectAsStateWithLifecycle("")
     var mapUrl by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(style) { mapUrl = style }
@@ -74,11 +81,12 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
             Toggle("Audible warnings", draft.audible) { draft = draft.copy(audible = it) }
             Text("Thresholds are user supplied in °C and RPM. Blank disables a threshold. No manufacturer limits are assumed.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Limit("Coolant °C", draft.coolantLimit, -40.0..200.0) { draft = draft.copy(coolantLimit = it) }
-            Limit("Oil °C", draft.oilLimit, -40.0..200.0) { draft = draft.copy(oilLimit = it) }
-            Limit("Intake °C", draft.intakeLimit, -40.0..200.0) { draft = draft.copy(intakeLimit = it) }
-            Limit("Shift RPM / redline", draft.rpmLimit, 1000.0..20_000.0) { draft = draft.copy(rpmLimit = it) }
-            Button(onClick = { scope.launch { message = runCatching { preferences.saveDashboard(vehicleId, draft); "Profile settings saved. Recording uses settings from session start." }.getOrElse { "Save failed: ${it.message}" } } }, modifier = Modifier.fillMaxWidth()) { Text("Save dashboard & warnings") }
+            Limit("Coolant °C", limits.coolant, -40.0..200.0) { limits = limits.copy(coolant = it) }
+            Limit("Oil °C", limits.oil, -40.0..200.0) { limits = limits.copy(oil = it) }
+            Limit("Intake °C", limits.intake, -40.0..200.0) { limits = limits.copy(intake = it) }
+            Limit("Shift RPM / redline", limits.rpm, 1000.0..20_000.0) { limits = limits.copy(rpm = it) }
+            if (!limits.valid) Text("Correct the highlighted limits before saving.", color = MaterialTheme.colorScheme.error)
+            Button(enabled = profileReady && limits.valid, onClick = { scope.launch { message = runCatching { preferences.saveDashboard(vehicleId, limits.applyTo(draft)); "Profile settings saved. Recording uses settings from session start." }.getOrElse { "Save failed: ${it.message}" } } }, modifier = Modifier.fillMaxWidth()) { Text("Save dashboard & warnings") }
         }
     }
     val systemPanel: @Composable () -> Unit = {
@@ -87,6 +95,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
             OutlinedButton(onClick = onConnectionStatus, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Info, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Connection status")
             }
+            dev.trackdash.recording.TelemetrySharingPanel()
             Text("Adapter, GPS, sensor availability, and recorder health details.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             OutlinedTextField(mapUrl, { mapUrl = it }, label = { Text("HTTPS map style URL (optional)") }, modifier = Modifier.fillMaxWidth())
@@ -123,7 +132,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
             val wide = maxWidth >= 840.dp
             TrackDashPage {
                 PageHeader("Settings", "Tune the cockpit, warnings, maps, and vehicle profiles.", eyebrow = "TrackDash configuration")
-                message?.let { StatusChip(it, if (it.startsWith("Save failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                message?.let { StatusChip(it, color = if (it.startsWith("Save failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
                 if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { dashboardPanel(); warningPanel() }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { systemPanel(); vehiclePanel() }
@@ -138,9 +147,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
 @Composable
 private fun Toggle(label: String, value: Boolean, change: (Boolean) -> Unit) { Row(Modifier.fillMaxWidth()) { Text(label, Modifier.weight(1f).padding(top = 12.dp)); Switch(value, change) } }
 @Composable
-private fun Limit(label: String, value: Double?, range: ClosedFloatingPointRange<Double>, change: (Double?) -> Unit) {
-    var text by remember { mutableStateOf(value?.toString() ?: "") }
-    LaunchedEffect(value) { if (text.toDoubleOrNull() != value) text = value?.toString() ?: "" }
-    val valid = text.isBlank() || text.toDoubleOrNull()?.let { it.isFinite() && it in range } == true
-    OutlinedTextField(text, { text = it; if (it.isBlank()) change(null) else it.toDoubleOrNull()?.takeIf { n -> n.isFinite() && n in range }?.let(change) }, label = { Text(label) }, isError = !valid)
+private fun Limit(label: String, text: String, range: ClosedFloatingPointRange<Double>, change: (String) -> Unit) {
+    OutlinedTextField(text, change, label = { Text(label) }, isError = !validLimit(text, range),
+        supportingText = { Text("Blank disables this limit") })
 }

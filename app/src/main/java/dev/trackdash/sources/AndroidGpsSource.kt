@@ -17,12 +17,15 @@ class AndroidGpsSource(context: Context) : LocationSource {
         check(manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) { "Enable device location/GPS before starting" }
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                trySend(GpsFix(location.latitude, location.longitude,
+                val fix = runCatching { GpsFix(location.latitude, location.longitude,
                     if (location.hasAltitude()) location.altitude else null,
                     if (location.hasSpeed()) location.speed.toDouble().coerceAtLeast(0.0) else null,
                     if (location.hasBearing()) location.bearing.toDouble() else null,
                     if (location.hasAccuracy()) location.accuracy.toDouble() else 10_000.0,
-                    location.provider ?: "gps", location.time, location.elapsedRealtimeNanos, false))
+                    location.provider ?: "gps", location.time, location.elapsedRealtimeNanos, false) }
+                fix.fold(onSuccess = {
+                    if (trySend(it).isFailure) close(IllegalStateException("GPS delivery buffer overflow"))
+                }, onFailure = { close(IllegalArgumentException("Invalid GPS fix", it)) })
             }
             override fun onProviderDisabled(provider: String) { close(IllegalStateException("GPS provider disabled")) }
         }

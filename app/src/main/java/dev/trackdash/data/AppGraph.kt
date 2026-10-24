@@ -10,6 +10,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class TrackDashApplication : Application() {
+    internal var recordingSources: dev.trackdash.sources.RecordingSourceFactory = dev.trackdash.sources.AndroidRecordingSources
+    // Injectable failure boundary for storage regression tests; production always uses Room.
+    internal var recordingBatchWriter: (suspend (List<SampleRow>) -> Unit)? = null
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val database by lazy { Room.databaseBuilder(this, TrackDashDatabase::class.java, "trackdash.db").build() }
     val recording = MutableStateFlow(RecordingState())

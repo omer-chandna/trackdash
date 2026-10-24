@@ -4,6 +4,7 @@ import androidx.compose.runtime.saveable.listSaver
 import dev.trackdash.core.SensorId
 import dev.trackdash.core.telemetry.AlertCategory
 import dev.trackdash.core.telemetry.AlertSeverity
+import dev.trackdash.core.telemetry.AlertCondition
 import dev.trackdash.core.telemetry.VehicleAlert
 
 internal const val SHIFT_WARNING_ID = "dashboard:shift"
@@ -29,9 +30,10 @@ internal data class DashboardWarningManager(
         // Establish a baseline when opening an already-active dashboard; do not replay old warnings.
         if (!initialized) return copy(initialized = true, knownSafetyIds = activeIds, knownShift = shiftActive)
 
-        val eligible = activeIds.toSet() + if (shiftActive) setOf(SHIFT_WARNING_ID) else emptySet()
+        val eligible = safety.filter { it.condition == AlertCondition.ACTIVE }.map { it.id }.toSet() +
+            if (shiftActive) setOf(SHIFT_WARNING_ID) else emptySet()
         var current = currentId?.takeIf { it in eligible }
-        val newSafety = activeIds.filter { it !in knownSafetyIds }
+        val newSafety = safety.filter { it.id !in knownSafetyIds && it.condition == AlertCondition.ACTIVE }.map { it.id }
         val candidates = (pendingIds.filter { it in eligible } + newSafety +
             if (shiftActive && !knownShift) listOf(SHIFT_WARNING_ID) else emptyList())
             .distinct().filter { it != current }

@@ -4,12 +4,14 @@ import dev.trackdash.core.*
 
 enum class AlertSeverity { WARNING, CRITICAL }
 enum class AlertCategory { ENGINE_SAFETY, CONNECTIVITY, DATA_QUALITY, SHIFT }
+enum class AlertCondition { ACTIVE, UNCONFIRMED }
 data class VehicleAlert(
     val id: String,
     val message: String,
     val severity: AlertSeverity,
     val category: AlertCategory,
     val sensor: SensorId? = null,
+    val condition: AlertCondition = AlertCondition.ACTIVE,
 )
 
 /** No real-vehicle default: limits must be supplied by the user or verified profile. */
@@ -27,11 +29,12 @@ data class TemperatureRule(
     }
 }
 
-/** Call on one dispatcher. Invalid/missing data resets pending and active thresholds. */
+/** Call on one dispatcher. Only a fresh safe reading clears an established engine warning. */
 class VehicleAlertEngine(private val rules: List<TemperatureRule>) {
     private val pendingSince = mutableMapOf<SensorId, Long>()
     private val active = mutableSetOf<SensorId>()
     private var lastTimestamp: Long? = null
+    private var pressureActive = false
 
     init { require(rules.map { it.sensor }.distinct().size == rules.size) }
 
@@ -40,19 +43,20 @@ class VehicleAlertEngine(private val rules: List<TemperatureRule>) {
         if (lastTimestamp?.let { now < it } == true) reset()
         lastTimestamp = now
         if (!sample.connected) {
-            reset()
-            return listOf(VehicleAlert("connection", "Vehicle data unavailable", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
+            pendingSince.clear()
+            return listOf(VehicleAlert("connection", "Vehicle data unavailable", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY)) +
+                active.map { temperatureAlert(it, unconfirmed = true) } +
+                if (pressureActive) listOf(pressureAlert(true)) else emptyList()
         }
         val alerts = mutableListOf<VehicleAlert>()
-        if (sample.oilPressure == OilPressureStatus.LOW) {
-            alerts += VehicleAlert("oil-pressure", "Low oil pressure", AlertSeverity.CRITICAL, AlertCategory.ENGINE_SAFETY)
-        }
+        if (sample.oilPressure == OilPressureStatus.LOW) pressureActive = true
+        if (sample.oilPressure == OilPressureStatus.OK) pressureActive = false
+        if (pressureActive) alerts += pressureAlert(sample.oilPressure != OilPressureStatus.LOW)
         rules.forEach { rule ->
             val reading = sample.readings.firstOrNull { it.sensorId == rule.sensor }
             val value = reading?.value?.takeIf { reading.status == SensorStatus.AVAILABLE }
             if (value == null) {
                 pendingSince.remove(rule.sensor)
-                active.remove(rule.sensor)
             } else if (rule.sensor in active) {
                 if (value <= rule.thresholdCelsius - rule.hysteresisCelsius) {
                     active.remove(rule.sensor)
@@ -65,22 +69,33 @@ class VehicleAlertEngine(private val rules: List<TemperatureRule>) {
                 pendingSince.remove(rule.sensor)
             }
             if (rule.sensor in active) {
-                val label = when (rule.sensor) {
-                    SensorId.COOLANT_TEMPERATURE -> "Coolant"
-                    SensorId.OIL_TEMPERATURE -> "Oil"
-                    SensorId.INTAKE_TEMPERATURE -> "Intake"
-                    else -> rule.sensor.name
-                }
-                alerts += VehicleAlert(rule.sensor.name, "$label temperature above configured limit", AlertSeverity.WARNING,
-                    AlertCategory.ENGINE_SAFETY, rule.sensor)
+                alerts += temperatureAlert(rule.sensor, value == null)
             }
         }
         return alerts
     }
 
+    private fun temperatureAlert(sensor: SensorId, unconfirmed: Boolean): VehicleAlert {
+        val label = when (sensor) {
+            SensorId.COOLANT_TEMPERATURE -> "Coolant"
+            SensorId.OIL_TEMPERATURE -> "Oil"
+            SensorId.INTAKE_TEMPERATURE -> "Intake"
+            else -> sensor.name
+        }
+        return VehicleAlert(sensor.name, if (unconfirmed) "$label warning unresolved — sensor unavailable" else "$label temperature above configured limit",
+            AlertSeverity.WARNING, AlertCategory.ENGINE_SAFETY, sensor,
+            if (unconfirmed) AlertCondition.UNCONFIRMED else AlertCondition.ACTIVE)
+    }
+
+    private fun pressureAlert(unconfirmed: Boolean) = VehicleAlert("oil-pressure",
+        if (unconfirmed) "Low oil pressure unresolved — sensor unavailable" else "Low oil pressure",
+        AlertSeverity.CRITICAL, AlertCategory.ENGINE_SAFETY,
+        condition = if (unconfirmed) AlertCondition.UNCONFIRMED else AlertCondition.ACTIVE)
+
     fun reset() {
         pendingSince.clear()
         active.clear()
         lastTimestamp = null
+        pressureActive = false
     }
 }
