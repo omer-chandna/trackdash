@@ -101,6 +101,7 @@ private fun MonitoringStatus(state: RecordingState) {
         })
         if (state.usesVehicle && !state.simulated) add("OIL PRESSURE NOT MONITORED")
         state.vehicleError?.let { add(it.uppercase()) }
+        if (state.sharingEnabled && (state.sharingStats.errors > 0 || state.sharingStats.dropped > 0)) add("SHARING DEGRADED · LOCAL CAPTURE ACTIVE")
     }.joinToString(" · ")
     if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)

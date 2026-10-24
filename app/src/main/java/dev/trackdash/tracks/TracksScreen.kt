@@ -67,7 +67,7 @@ fun TracksScreen() {
                 Button(onClick = { editing = "new" }) { Text("New track") }
             },
         )
-        error?.let { StatusChip(it, if (it.startsWith("Import failed") || it.startsWith("Export failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+        error?.let { StatusChip(it, color = if (it.startsWith("Import failed") || it.startsWith("Export failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
         if (tracks.isEmpty()) {
             EmptyState("No tracks yet", "Create a circuit or import a TrackDash JSON file.", Modifier.fillMaxWidth()) {
                 Button(onClick = { editing = "new" }) { Text("Create first track") }
@@ -159,7 +159,7 @@ private fun TrackEditor(id: String, onDone: () -> Unit) {
                     Text(if (drawing) "Cancel drawing" else if (gates.isEmpty()) "Draw start / finish" else "Draw sector gate")
                 }
                 first?.let { Text("First endpoint: %.6f, %.6f".format(it.latitude, it.longitude), style = MaterialTheme.typography.bodySmall) }
-                message?.let { StatusChip(it, if (it.startsWith("Save failed") || it.startsWith("Enter") || it.startsWith("Gate must")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                message?.let { StatusChip(it, color = if (it.startsWith("Save failed") || it.startsWith("Enter") || it.startsWith("Gate must")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
             }
             if (gates.isNotEmpty()) TrackDashPanel {
                 SectionTitle("Timing gates")

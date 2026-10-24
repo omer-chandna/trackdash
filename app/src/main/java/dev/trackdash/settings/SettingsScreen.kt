@@ -95,6 +95,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
             OutlinedButton(onClick = onConnectionStatus, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Info, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Connection status")
             }
+            dev.trackdash.recording.TelemetrySharingPanel()
             Text("Adapter, GPS, sensor availability, and recorder health details.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             OutlinedTextField(mapUrl, { mapUrl = it }, label = { Text("HTTPS map style URL (optional)") }, modifier = Modifier.fillMaxWidth())
@@ -131,7 +132,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit) {
             val wide = maxWidth >= 840.dp
             TrackDashPage {
                 PageHeader("Settings", "Tune the cockpit, warnings, maps, and vehicle profiles.", eyebrow = "TrackDash configuration")
-                message?.let { StatusChip(it, if (it.startsWith("Save failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                message?.let { StatusChip(it, color = if (it.startsWith("Save failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
                 if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { dashboardPanel(); warningPanel() }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { systemPanel(); vehiclePanel() }

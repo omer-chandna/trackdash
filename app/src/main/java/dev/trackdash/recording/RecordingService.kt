@@ -13,6 +13,7 @@ import dev.trackdash.core.simulation.*
 import dev.trackdash.core.telemetry.*
 import dev.trackdash.core.obd.ObdCapabilityCache
 import dev.trackdash.core.obd.vehicleIdentityMismatch
+import dev.trackdash.core.sharing.SharingStats
 import android.media.AudioManager
 import android.media.ToneGenerator
 import dev.trackdash.data.*
@@ -34,7 +35,8 @@ data class RecordingState(val sessionId: String? = null, val active: Boolean = f
     val gpsRateHz: Double = 0.0, val theoreticalBestNanos: Long? = null,
     val dashboard: DashboardPreferences = DashboardPreferences(), val transport: String = "None",
     val shiftActive: Boolean = false, val usesGps: Boolean = true, val usesVehicle: Boolean = false,
-    val gpsError: String? = null, val vehicleError: String? = null)
+    val gpsError: String? = null, val vehicleError: String? = null,
+    val sharingEnabled: Boolean = false, val sharingStats: SharingStats = SharingStats(), val sharingMessage: String? = null)
 
 internal fun nextShiftState(current: Boolean, rpm: Double?, limit: Double?): Boolean = when {
     rpm == null || limit == null -> false
@@ -101,7 +103,8 @@ class RecordingService : Service() {
             preferences.oilLimit?.let { add(TemperatureRule(SensorId.OIL_TEMPERATURE, it)) }
             preferences.intakeLimit?.let { add(TemperatureRule(SensorId.INTAKE_TEMPERATURE, it)) }
         })
-        val tone = if (preferences.audible) ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) else null
+        val tone = if (preferences.audible) runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }.getOrNull() else null
+        var audioAvailable = !preferences.audible || tone != null
         var activeAlerts = emptyMap<String, VehicleAlert>()
         var rpmActive = false
         var vehicleAlerts = emptyList<VehicleAlert>()
@@ -115,16 +118,28 @@ class RecordingService : Service() {
                 for (first in queue) {
                     val batch = mutableListOf(first)
                     while (batch.size < 64) batch += queue.tryReceive().getOrNull() ?: break
-                    graph.database.dao().insertSamples(batch)
+                    val writeBatch = graph.recordingBatchWriter
+                    if (writeBatch == null) graph.database.dao().insertSamples(batch) else writeBatch(batch)
                     graph.recording.update { it.copy(samples = it.samples + batch.size) }
                 }
             } catch (error: Exception) { queue.close(error); throw error }
         }
         suspend fun save(kind: String, nanos: Long, wall: Long, payload: String) = queue.send(SampleRow(sessionId = id, elapsedNanos = nanos, wallMillis = wall, kind = kind, payload = payload))
         val timer = track?.let { LapTimer(it) }
+        var sharing: TelemetrySharingSession? = null
         try {
             // Observe storage failures immediately, even if neither source produces another sample.
             launch { writer.await() }
+            try {
+                sharing = if (mode.usesVehicle) TelemetrySharingSession.create(this@RecordingService, this) else null
+                graph.recording.update { it.copy(sharingEnabled = sharing != null) }
+                sharing?.let { session -> launch { session.stats.collect { stats ->
+                    graph.recording.update { it.copy(sharingStats = stats) }
+                } } }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                graph.recording.update { it.copy(sharingMessage = "Sharing unavailable; local recording is unaffected") }
+            }
             if (track != null) save("track-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), TrackJson.encode(track))
             save("settings-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString(preferences))
             if (mode.usesVehicle) launch {
@@ -153,6 +168,7 @@ class RecordingService : Service() {
                     latestVehicle = sample
                     graph.recording.update { it.copy(vehicleError = if (sample.connected) null else "Vehicle data unavailable; reconnecting") }
                     save("vehicle", sample.elapsedRealtimeNanos, System.currentTimeMillis(), Json.encodeToString(sample))
+                    sharing?.tryOffer(sample)
                 }
             }
             if (mode.usesGps) launch {
@@ -194,6 +210,7 @@ class RecordingService : Service() {
                     graph.recording.update { it.copy(vehicle = effective, shiftActive = rpmActive) }
                     val currentList = if (preferences.alertsEnabled) buildList {
                         addAll(vehicleAlerts)
+                        if (!audioAvailable) add(VehicleAlert("audio-unavailable", "Audible warnings unavailable", AlertSeverity.WARNING, AlertCategory.DATA_QUALITY))
                         if (mode.usesVehicle && effective == null && now - beganNanos > VEHICLE_FRESHNESS_NANOS) add(VehicleAlert(
                             "vehicle-acquiring", "Vehicle data not available yet", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
                         if (mode.usesGps && (graph.recording.value.gpsError != null || age != null && age > 3 || age == null && now - beganNanos > 10_000_000_000L)) add(VehicleAlert(
@@ -215,7 +232,8 @@ class RecordingService : Service() {
                             save(if (alert.condition == AlertCondition.UNCONFIRMED) "alert-unconfirmed" else "alert-confirmed",
                                 now, System.currentTimeMillis(), Json.encodeToString(alert.message))
                     }
-                    if ((currentAlerts.keys - activeAlerts.keys).isNotEmpty()) tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
+                    if ((currentAlerts.keys - activeAlerts.keys).isNotEmpty() && tone != null)
+                        audioAvailable = runCatching { tone.startTone(ToneGenerator.TONE_PROP_BEEP, 300) }.getOrDefault(false)
                     activeAlerts = currentAlerts
                     graph.recording.update { it.copy(alerts = currentList.filterNot { alert -> alert.category == AlertCategory.SHIFT }) }
                     graph.recording.update { it.copy(gpsAgeSeconds = age, currentLapNanos = timer?.startedAtNanos?.let { start -> now - start } ?: 0) }
@@ -224,8 +242,9 @@ class RecordingService : Service() {
             }
             awaitCancellation()
         } finally {
+            sharing?.close()
             queue.close()
-            try { withContext(NonCancellable) { writer.await() } } finally { tone?.release() }
+            try { withContext(NonCancellable) { writer.await() } } finally { runCatching { tone?.release() } }
         }
     }
 

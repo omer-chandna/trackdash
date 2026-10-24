@@ -34,7 +34,7 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                 TrackDashPanel {
                     SectionTitle("Vehicle data", "Adapter and protocol availability")
                     StatusChip(if (!state.active) "Inactive · last session information" else state.obd.state,
-                        if (state.obd.errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                        color = if (state.obd.errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     Text("Transport · ${state.transport}")
                     Text("ECU · ${state.obd.ecu.ifBlank { "—" }}")
                     Text("Protocol · ${state.obd.protocol.ifBlank { "—" }}")
@@ -54,7 +54,7 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                 val gpsStatus = when { !state.active -> "Inactive"; !state.usesGps -> "Not requested"; state.gpsError != null -> "Unavailable · retrying"; state.gps == null -> "Acquiring"; (state.gpsAgeSeconds ?: 0.0) > 3 -> "Lost"; state.gps!!.horizontalAccuracyMeters > 25 -> "Degraded"; else -> "Ready" }
                 TrackDashPanel {
                     SectionTitle("GPS", "Fix quality and delivery rate")
-                    StatusChip(gpsStatus, if (gpsStatus in listOf("Lost", "Degraded")) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+                    StatusChip(gpsStatus, color = if (gpsStatus in listOf("Lost", "Degraded")) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
                     state.gps?.let { fix ->
                         Text("${fix.latitude}, ${fix.longitude} · ${fix.provider}")
                         Text("Accuracy ${fix.horizontalAccuracyMeters} m · Age ${state.gpsAgeSeconds} s")
@@ -70,6 +70,10 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
                     MetricTile("Stored samples", state.samples.toString(), if (state.simulated) "simulation" else "device", Modifier.fillMaxWidth())
                     Text("Database · ${context.getDatabasePath("trackdash.db").length() / 1024} KiB", style = MaterialTheme.typography.bodyMedium)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (state.sharingEnabled) Text("Sharing · ${state.sharingStats.sent} sent · ${state.sharingStats.dropped} dropped · ${state.sharingStats.errors} errors",
+                        style = MaterialTheme.typography.bodySmall)
+                    else Text("Sharing · off", style = MaterialTheme.typography.bodySmall)
+                    state.sharingMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
             TrackDashPage {

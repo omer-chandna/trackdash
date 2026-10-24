@@ -25,16 +25,19 @@ import dev.trackdash.core.gps.TimedLap
 import dev.trackdash.data.*
 import dev.trackdash.ui.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import java.text.DateFormat
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionsScreen() {
+fun SessionsScreen(onReplay: (String) -> Unit) {
     val context = LocalContext.current
     val dao = (context.applicationContext as TrackDashApplication).database.dao()
-    val sessions by dao.sessions().collectAsStateWithLifecycle(emptyList())
+    val loadedSessions by remember(dao) { dao.sessions().map<List<SessionRow>, List<SessionRow>?> { it } }
+        .collectAsStateWithLifecycle(null)
+    val sessions = loadedSessions.orEmpty()
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var exportId by rememberSaveable { mutableStateOf<String?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionRow?>(null) }
@@ -51,7 +54,9 @@ fun SessionsScreen() {
     }
     val selected = sessions.find { it.id == selectedId }
     BackHandler(enabled = selectedId != null) { selectedId = null }
-    LaunchedEffect(selectedId, sessions) { if (selectedId != null && selected == null) selectedId = null }
+    LaunchedEffect(selectedId, loadedSessions) {
+        if (loadedSessions != null && selectedId != null && selected == null) selectedId = null
+    }
 
     fun requestExport(session: SessionRow) {
         exportId = session.id
@@ -66,7 +71,8 @@ fun SessionsScreen() {
                     if (count == 1) {
                         if (selectedId == session.id) selectedId = null
                         "Session deleted"
-                    } else "Active sessions must be stopped and saved before deletion"
+                    } else if (dao.session(session.id) == null) "Session was already removed"
+                    else "Active sessions must be stopped and saved before deletion"
                 },
                 onFailure = { "Delete failed: ${it.message}" },
             )
@@ -87,7 +93,7 @@ fun SessionsScreen() {
                             TrackDashPanel(Modifier.weight(1f).fillMaxHeight(), emphasized = true) {
                                 SessionDetailHeader(selected, onBack = { selectedId = null }, onDelete = { deleteTarget = selected })
                                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    item { SessionDetails(selected, dao, onExport = { requestExport(selected) }) }
+                                    item { SessionDetails(selected, dao, onExport = { requestExport(selected) }, onReplay = { onReplay(selected.id) }) }
                                 }
                             }
                         } else {
@@ -105,7 +111,7 @@ fun SessionsScreen() {
                         actions = { DeleteSessionButton(selected, onDelete = { deleteTarget = selected }) },
                     )
                     LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        item { SessionDetails(selected, dao, onExport = { requestExport(selected) }) }
+                        item { SessionDetails(selected, dao, onExport = { requestExport(selected) }, onReplay = { onReplay(selected.id) }) }
                     }
                 }
             } else {
@@ -150,7 +156,7 @@ private fun SessionList(
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             StatusChip(if (session.simulated) "Simulated" else "Device")
-                            StatusChip(session.status, if (session.status == "RECORDING") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+                            StatusChip(session.status, color = if (session.status == "RECORDING") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
                         }
                     }
                     DeleteSessionButton(session) { onDelete(session) }
@@ -193,7 +199,7 @@ private fun sessionLabel(session: SessionRow): String = DateFormat.getDateTimeIn
 private fun modeLabel(mode: String): String = mode.replace('_', ' ').lowercase().replaceFirstChar { it.titlecase() }
 
 @Composable
-private fun SessionDetails(session: SessionRow, dao: TrackDashDao, onExport: () -> Unit) {
+private fun SessionDetails(session: SessionRow, dao: TrackDashDao, onExport: () -> Unit, onReplay: () -> Unit) {
     val samples by dao.sampleCount(session.id).collectAsStateWithLifecycle(0L)
     val rows by dao.events(session.id, "lap").collectAsStateWithLifecycle(emptyList())
     val laps = remember(rows) { rows.mapNotNull { runCatching { Json.decodeFromString<TimedLap>(it.payload) }.getOrNull() } }
@@ -237,6 +243,7 @@ private fun SessionDetails(session: SessionRow, dao: TrackDashDao, onExport: () 
             }
         }
         if (session.status == "RECORDING") Text("Stop and save this recording before exporting or deleting it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = onReplay, enabled = session.status != "RECORDING") { Text("Replay session") }
         if (noteStatus.isNotEmpty()) Text(noteStatus, color = MaterialTheme.colorScheme.primary)
         AnalysisPanel(session, dao, laps)
     }
