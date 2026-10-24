@@ -3,7 +3,7 @@
 Android's GPS provider supplies WGS84 coordinates, accuracy, optional altitude,
 speed/bearing, wall time and elapsed-realtime nanoseconds. Simulation uses the
 same source contract and timing engine. Requested 5 Hz is not a guarantee that a
-phone delivers that rate; Diagnostics reports observed delivery intervals.
+phone delivers that rate; Connection Status reports observed delivery intervals.
 
 The engine uses a local metric projection with longitude wrapping, finite segment
 intersection, direction checking, and monotonic timestamp interpolation. The

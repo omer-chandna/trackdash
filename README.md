@@ -32,6 +32,24 @@ All synthetic data is identified as simulation in the UI and export.
 background and does not record. Session recording continues with a foreground
 service through navigation, rotation and normal backgrounding.
 
+## Driving display and warnings
+
+The landscape rally display uses large white numbers on black, compact controls,
+and 12 green/yellow/red RPM lights. Configure **Shift RPM / redline** for a real
+vehicle profile; no vehicle limit is assumed. Reaching that limit flashes a
+full-screen **SHIFT** prompt three times, followed by a steady prompt until RPM
+falls more than 200 RPM below the limit.
+
+New engine-safety warnings flash individually, three pulses per warning. Low oil
+pressure has first priority among simultaneous warnings; additional warnings join
+the queue. Cleared warnings leave the queue, and active warning banners/gauge
+highlights remain until the conditions clear. GPS loss and stale/disconnected data
+show status warnings without triggering the engine-safety flash.
+
+Home, Tracks, and Sessions use an icon rail in landscape and an icon-only bottom
+bar in portrait. Connection Status is available through **Settings → Maps & advanced**.
+Back leaves an active recording running; **Stop and save** explicitly ends it.
+
 ## Connect the owner's Veepeak OBDCheck BLE
 
 1. Plug the adapter into the stationary vehicle and turn on ignition.
@@ -77,6 +95,10 @@ Session analysis includes exact recorded peaks, sampled charts and GPS paths,
 valid best/average lap, sectors, and two-lap comparisons by elapsed time. CSV is
 written through Android's document picker in bounded pages with timestamps,
 canonical units, source and availability status. Stop a session before export.
+
+Use the trash action in session history or session details to permanently delete
+a finished or interrupted session and its samples, laps, events, and notes. A
+confirmation is required, and active recordings cannot be deleted.
 
 ## Validation and remaining work
 

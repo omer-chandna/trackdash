@@ -1,9 +1,9 @@
 # Roadmap
 
-Authoritative status as of 2026-10-14. The owner authorized direct incremental
-commits to main and a final push. COMPLETED below means the stated software scope
-is integrated and tested; physical verification is listed separately. This is a
-development build, not a claim that every hardware/release acceptance gate passed.
+Authoritative status as of 2026-10-24. COMPLETED below describes software already
+integrated on main; the rally refresh is submitted separately for review and
+remains IN_REVIEW until approved integration. Physical verification is listed
+separately. This is a development build, not a claim that hardware/release gates passed.
 
 | Feature | Status | Integration | Acceptance evidence / remaining limits |
 |---|---|---|---|
@@ -26,6 +26,18 @@ development build, not a claim that every hardware/release acceptance gate passe
 | Enhanced manufacturer sensors | BLOCKED | protocol evidence | Exact ECU service identifiers/scaling/captures are not verified; oil-pressure switch remains unavailable in generic OBD |
 | BLE compatibility | IN_REVIEW | main | Experimental vendor-documented OBDLink CX driver and scan/recovery; physical validation pending; Veepeak uses Classic |
 | Release preparation | IN_PROGRESS | main | Build/tests/docs/screenshots prepared; physical/current-Android/performance gates and owner license decision pending |
+
+## Rally refresh awaiting integration
+
+Branch: `codex/rally-dashboard-warning-manager`. Review notes and screenshots:
+[rally dashboard refresh](reviews/rally-dashboard-refresh.md).
+
+| Feature | Status | Acceptance evidence / remaining limits |
+|---|---|---|
+| Rally display and manual-car focus | IN_REVIEW | Large adaptive white-on-black readings, 12 RPM lights, explicit configured redline, SHIFT pulses/hysteresis; no gear UI |
+| Sequential engine warnings | IN_REVIEW | Three-pulse cycles per activation, pressure priority, queue clear/recurrence, saved rotation state, connectivity exclusion, safety-before-SHIFT tests |
+| Landscape navigation and detail flows | IN_REVIEW | Fixed icon rail, portrait bottom navigation, advanced Connection Status, visible/system Back and continuing foreground recording |
+| Session deletion and neutral vehicle profiles | IN_REVIEW | Conditional DAO deletion, confirmation/cascade tests, active-session protection, exact legacy preset cleanup preserving user profiles |
 
 ## Remaining acceptance work
 

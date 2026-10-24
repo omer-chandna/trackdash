@@ -13,7 +13,7 @@ Deliver the first practical milestone before implementing simulated/hardware tel
 
 - Kotlin/Compose Material 3 app, API 29 minimum and API 37 target.
 - Dark motorsport theme, launcher icon, matching system bars and responsive navigation.
-- Home, Tracks, Sessions and Diagnostics with explicit inactive/empty states.
+- Home, Tracks, and Sessions as primary navigation, with Connection Status under Settings.
 - Operating-mode selection through a SavedStateHandle-injected ViewModel/StateFlow.
 - Independent vehicle and GPS contracts in a JVM module, canonical units and validated data.
 - Gradle wrapper with distribution checksum, version catalog and documented dependency evidence.
