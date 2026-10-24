@@ -9,8 +9,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material.icons.Icons
@@ -26,10 +24,10 @@ import dev.trackdash.core.*
 import dev.trackdash.data.TrackDashApplication
 import dev.trackdash.data.Preferences
 import dev.trackdash.data.DashboardPreferences
-import dev.trackdash.core.simulation.SimulationScenario
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.*
 import dev.trackdash.sources.discoverCxAdapters
+import dev.trackdash.sources.discoverObdVehicle
+import dev.trackdash.core.obd.*
 import dev.trackdash.ui.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +53,41 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
     val scope = rememberCoroutineScope()
     var devices by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Results belong to this exact setup, never to the address/profile that was previously selected.
+    val discoveryKey = listOf(address, bleCx, vehicleId, simulated, modeName)
+    var discovery by remember(discoveryKey) { mutableStateOf<ObdDiscoveryResult?>(null) }
+    var discovering by remember(discoveryKey) { mutableStateOf(false) }
+    var discoveryError by remember(discoveryKey) { mutableStateOf<String?>(null) }
+    var discoveryJob by remember(discoveryKey) { mutableStateOf<Job?>(null) }
+    var discoveryAtMillis by remember(discoveryKey) { mutableLongStateOf(0L) }
+    var discoveryExpired by remember(discoveryKey) { mutableStateOf(false) }
+    var compatibilityDialog by remember(discoveryKey) { mutableStateOf(false) }
+    var reportVehicle by remember(discoveryKey) { mutableStateOf("") }
+    var reportAdapter by remember(discoveryKey) { mutableStateOf("") }
+    var pendingReport by rememberSaveable { mutableStateOf<String?>(null) }
+    var reportMessage by remember { mutableStateOf<String?>(null) }
+    val exportCompatibility = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val payload = pendingReport
+        pendingReport = null
+        if (uri != null && payload != null) scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    requireNotNull(context.contentResolver.openOutputStream(uri)) { "Cannot open the selected document" }
+                        .use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                }
+                reportMessage = "Compatibility report exported. Review it before sharing; this is a user report, not hardware certification."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { reportMessage = "Could not export report: ${failure.message}" }
+        }
+    }
+    val selectedProfile = vehicles.firstOrNull { it.id == vehicleId }
+    val cachedDiscovery = remember(selectedProfile?.capabilities) { ObdCapabilityCache.decode(selectedProfile?.capabilities.orEmpty()) }
+    val identityMismatch = vehicleIdentityMismatch(selectedProfile?.vin, discovery?.vin)
+    LaunchedEffect(discoveryAtMillis) {
+        if (discoveryAtMillis > 0) { delay(120_000); discoveryExpired = true }
+    }
+    DisposableEffect(discoveryKey) { onDispose { discoveryJob?.cancel() } }
+    LaunchedEffect(state.active) { if (state.active) discoveryJob?.cancel() }
     fun start() {
         runCatching { context.startForegroundService(Intent(context, RecordingService::class.java)
             .putExtra("simulated", simulated).putExtra("mode", mode.name).putExtra("track", trackId)
@@ -103,11 +136,12 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
             }
             if (mode.usesVehicle) {
                 Text("Vehicle profile (optional)", style = MaterialTheme.typography.labelLarge)
+                FilterChip(vehicleId.isEmpty(), { vehicleId = "" }, { Text("Default profile") })
                 if (vehicles.isEmpty()) Text("No saved vehicles. Default dashboard settings will be used.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 vehicles.forEach { vehicle -> FilterChip(vehicleId == vehicle.id, { vehicleId = vehicle.id }, { Text(vehicle.name) }) }
             }
             if (!simulated && mode.usesVehicle) {
-                OutlinedButton(onClick = {
+                OutlinedButton(enabled = !discovering && !scanning, onClick = {
                     if (Build.VERSION.SDK_INT >= 31 && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
                         permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
                     else runCatching { bleCx = false; address = ""; devices = context.getSystemService(BluetoothManager::class.java).adapter?.bondedDevices?.map { (it.name ?: "Adapter") to it.address } ?: emptyList() }
@@ -115,7 +149,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                 }, modifier = Modifier.fillMaxWidth()) { Text("Load paired Classic adapters") }
                 Text("Pair a supported Classic Bluetooth adapter in Android settings, then select it here.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(enabled = !scanning, onClick = {
+                TextButton(enabled = !scanning && !discovering, onClick = {
                     val needed = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
                         else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
                     if (needed.any { context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) permissions.launch(needed)
@@ -128,8 +162,63 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                     }
                 }) { Text(if (scanning) "Scanning BLE adapters…" else "Scan OBDLink CX (experimental BLE)") }
                 devices.forEach { (name, value) -> FilterChip(address == value, { address = value }, { Text("$name · $value") }) }
+                HorizontalDivider()
+                Text("Check this vehicle", style = MaterialTheme.typography.titleMedium)
+                Text("Keep the vehicle stationary with ignition on. Discovery uses read-only standard OBD-II queries; no manufacturer limits or enhanced sensors are assumed.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (discovering) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Checking ECU support and reading advertised sensors… This can take up to two minutes.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { discoveryJob?.cancel() }) { Text("Cancel sensor check") }
+                } else OutlinedButton(enabled = address.isNotBlank() && !scanning, modifier = Modifier.fillMaxWidth(), onClick = {
+                    if (Build.VERSION.SDK_INT >= 31 && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
+                        permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+                    else {
+                        discovery = null; discoveryError = null; discovering = true; discoveryExpired = false
+                        val scanVehicleId = vehicleId
+                        discoveryJob = scope.launch {
+                            try {
+                                val result = discoverObdVehicle(context.applicationContext, address, bleCx)
+                                ensureActive()
+                                if (scanVehicleId.isNotBlank()) graph.database.dao().vehicle(scanVehicleId)?.let { row ->
+                                    if (!vehicleIdentityMismatch(row.vin, result.vin))
+                                        graph.database.dao().saveVehicle(row.copy(capabilities = ObdCapabilityCache.encode(result), vin = result.vin ?: row.vin))
+                                }
+                                discovery = result
+                                discoveryAtMillis = System.currentTimeMillis()
+                                if (result.selectedEcu == null) discoveryError = "No usable sensor readings yet. Check ignition and adapter, then retry."
+                            } catch (_: TimeoutCancellationException) { discoveryError = "Sensor check timed out. Check the adapter and retry." }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (failure: Exception) { discoveryError = "Sensor check failed: ${failure.message ?: "connection unavailable"}. Retry when ready." }
+                            finally { discovering = false }
+                        }
+                    }
+                }) { Text(if (discovery == null) "Discover available sensors" else "Check sensors again") }
+                discoveryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (discovery == null && cachedDiscovery != null) {
+                    Text("Saved check · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(cachedDiscovery.checkedAtMillis))}. Cached only — check this adapter and vehicle again before recording.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ObdDiscoverySummary(cachedDiscovery.discovery, cached = true)
+                } else if (discovery == null && !selectedProfile?.capabilities.isNullOrBlank()) {
+                    Text("This profile has an older capability list, not a verified sensor check. Discover again before recording.", style = MaterialTheme.typography.bodySmall)
+                }
+                discovery?.let { result ->
+                    ObdDiscoverySummary(result, cached = false)
+                    Text("Read during sensor check · ${java.text.DateFormat.getTimeInstance().format(java.util.Date(discoveryAtMillis))}. This is not a live feed.",
+                        style = MaterialTheme.typography.bodySmall)
+                    if (discoveryExpired) Text("This check expired. Check sensors again before recording.", color = MaterialTheme.colorScheme.error)
+                    if (identityMismatch) Text("A different vehicle was detected. Choose or create the correct vehicle profile, or explicitly select Default profile and configure its limits. The saved vehicle identity has not been changed.", color = MaterialTheme.colorScheme.error)
+                    if (result.vin == null) Text("Vehicle identity could not be verified. Confirm the selected profile and limits belong to this vehicle.", style = MaterialTheme.typography.bodySmall)
+                    Text("Recording checks the connection again; these results are not a guarantee that readings will remain available.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = { compatibilityDialog = true }) { Text("Export compatibility report") }
+                }
+                reportMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
-            Button(enabled = simulated || (!mode.usesGps || trackId.isNotBlank()) && (!mode.usesVehicle || address.isNotBlank()), onClick = {
+            if (mode.usesVehicle) MonitoringReadinessPanel(preferences,
+                discovery?.selected?.supportedSensors, if (discoveryExpired || identityMismatch) emptySet() else discovery?.selected?.availableSensors, simulated,
+                discovery?.selected?.sensors?.filter { it.availability == ObdSensorAvailability.UNKNOWN }?.map { it.sensor }?.toSet().orEmpty())
+            Button(enabled = simulated || (!mode.usesGps || trackId.isNotBlank()) && (!mode.usesVehicle || discovery?.selectedEcu != null && !discoveryExpired && !identityMismatch) && !discovering && !scanning, onClick = {
                 val required = buildList {
                     if (!simulated && mode.usesGps) { add(Manifest.permission.ACCESS_FINE_LOCATION); add(Manifest.permission.ACCESS_COARSE_LOCATION) }
                     if (!simulated && mode.usesVehicle && Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -163,6 +252,49 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
             if (state.sessionId != null) Text("Last session: ${state.laps} laps. Open Sessions to review saved data.")
         }
       }
+    }
+    if (compatibilityDialog && discovery != null) AlertDialog(
+        onDismissRequest = { compatibilityDialog = false },
+        title = { Text("Share compatibility evidence") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Exports sensor support and read results, standard ECU addresses, connection type and scan time. No VIN, Bluetooth address, location, notes or telemetry values are included. Nothing is uploaded automatically.")
+            OutlinedTextField(reportVehicle, { reportVehicle = it.take(120) }, label = { Text("Vehicle model / year (optional)") }, singleLine = true)
+            OutlinedTextField(reportAdapter, { reportAdapter = it.take(120) }, label = { Text("Adapter model (optional)") }, singleLine = true)
+            Text("Do not enter VINs, registrations or personal information. A scan does not certify the hardware.", style = MaterialTheme.typography.bodySmall)
+        } },
+        confirmButton = { TextButton(onClick = {
+            discovery?.let { result ->
+                pendingReport = ObdCompatibilityReports.encode(result, discoveryAtMillis, bleCx, reportVehicle, reportAdapter)
+                exportCompatibility.launch("trackdash-compatibility.json")
+            }
+            compatibilityDialog = false
+        }) { Text("Choose save location") } },
+        dismissButton = { TextButton(onClick = { compatibilityDialog = false }) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ObdDiscoverySummary(result: ObdDiscoveryResult, cached: Boolean) {
+    var expanded by remember(result, cached) { mutableStateOf(false) }
+    val selected = result.selected
+    Text(if (cached) "Previously selected ECU: ${result.selectedEcu ?: "none"}" else "Selected ECU: ${result.selectedEcu ?: "none usable"}",
+        style = MaterialTheme.typography.titleSmall)
+    Text("${selected?.availableSensors?.size ?: 0} sensors returned decoded readings · ${result.ecus.size} responding ECU(s)", style = MaterialTheme.typography.bodySmall)
+    Text("Oil pressure is not monitored: no supported standard OBD-II pressure signal.", style = MaterialTheme.typography.bodySmall)
+    TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide sensor results" else "Show sensor results") }
+    if (expanded) result.ecus.forEach { ecu ->
+        Text("ECU ${ecu.ecu}${if (ecu.ecu == result.selectedEcu) " · selected" else ""}", style = MaterialTheme.typography.labelLarge)
+        ecu.sensors.forEach { sensor ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(sensor.sensor.name.lowercase().replace('_', ' '), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(when (sensor.availability) {
+                    ObdSensorAvailability.AVAILABLE -> if (cached) "Previously read" else "Read successfully"
+                    ObdSensorAvailability.UNAVAILABLE -> "Advertised · no data"
+                    ObdSensorAvailability.UNSUPPORTED -> "Unsupported"
+                    ObdSensorAvailability.UNKNOWN -> "Unknown · retry check"
+                }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

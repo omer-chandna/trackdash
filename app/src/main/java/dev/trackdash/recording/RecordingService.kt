@@ -11,6 +11,8 @@ import dev.trackdash.core.*
 import dev.trackdash.core.gps.*
 import dev.trackdash.core.simulation.*
 import dev.trackdash.core.telemetry.*
+import dev.trackdash.core.obd.ObdCapabilityCache
+import dev.trackdash.core.obd.vehicleIdentityMismatch
 import android.media.AudioManager
 import android.media.ToneGenerator
 import dev.trackdash.data.*
@@ -132,9 +134,15 @@ class RecordingService : Service() {
                     graph.recording.update { it.copy(obd = diagnostics) }
                     if (diagnostics.supported.isNotEmpty() && vehicleId.isNotBlank()) {
                         graph.database.dao().vehicle(vehicleId)?.let { row ->
-                            val capabilities = diagnostics.supported.sorted().joinToString { "%02X".format(it) }
-                            if (row.capabilities != capabilities || diagnostics.vin != null && row.vin != diagnostics.vin)
-                                graph.database.dao().saveVehicle(row.copy(capabilities = capabilities, vin = diagnostics.vin ?: row.vin))
+                            check(!vehicleIdentityMismatch(row.vin, diagnostics.vin)) {
+                                "Different vehicle detected. Stop and choose the correct profile before recording."
+                            }
+                            val discovery = diagnostics.discovery
+                            val changed = discovery != null && ObdCapabilityCache.decode(row.capabilities)?.discovery != discovery.copy(vin = null)
+                            if (changed || diagnostics.vin != null && row.vin != diagnostics.vin)
+                                graph.database.dao().saveVehicle(row.copy(
+                                    capabilities = if (changed) ObdCapabilityCache.encode(requireNotNull(discovery)) else row.capabilities,
+                                    vin = diagnostics.vin ?: row.vin))
                         }
                     }
                 } }

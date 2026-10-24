@@ -4,6 +4,7 @@ import dev.trackdash.core.SensorId
 
 interface ElmTransport { suspend fun exchange(command: String, timeoutMillis: Long = 2500): String; fun close() }
 data class EcuFrame(val ecu: String, val bytes: List<Int>)
+data class SupportedPidReport(val supported: Map<String, Set<Int>>, val pages: Map<String, Set<Int>>)
 
 object ObdParser {
     /** ATH1 responses: 11/29-bit CAN or three-byte ISO headers; no ECU concatenation. */
@@ -68,16 +69,26 @@ class ElmProtocol(private val transport: ElmTransport) {
         }
     }
     suspend fun discover(): Map<String, Set<Int>> {
+        return discoverCapabilities().supported
+    }
+    suspend fun discoverCapabilities(): SupportedPidReport {
         val byEcu = mutableMapOf<String, MutableSet<Int>>()
+        val pages = mutableMapOf<String, MutableSet<Int>>()
         var base = 0
         do {
             val command = "01%02X".format(base)
             val frames = ObdParser.frames(transport.exchange(command, 8000), command)
-            frames.forEach { frame -> byEcu.getOrPut(frame.ecu) { mutableSetOf() }.addAll(ObdParser.supported(frame, base)) }
+            frames.filter { it.bytes.take(2) == listOf(0x41, base) }.forEach { frame ->
+                byEcu.getOrPut(frame.ecu) { mutableSetOf() }.addAll(ObdParser.supported(frame, base))
+                pages.getOrPut(frame.ecu) { mutableSetOf() }.add(base)
+            }
+            require(byEcu.size <= 32) { "Too many responding ECUs" }
             base += 32
         } while (base <= 0xe0 && byEcu.values.any { base in it })
-        return byEcu.mapValues { it.value.toSet() }
+        return SupportedPidReport(byEcu.mapValues { it.value.toSet() }, pages.mapValues { it.value.toSet() })
     }
+    suspend fun readAll(pid: Pid): Map<String, Double> = ObdParser.frames(transport.exchange(pid.command), pid.command)
+        .filter { it.bytes.take(2) == listOf(0x41, pid.code) }.associate { it.ecu to pid.value(it) }
     suspend fun read(pid: Pid, ecu: String): Double? = ObdParser.frames(transport.exchange(pid.command), pid.command)
         .firstOrNull { it.ecu == ecu && it.bytes.take(2) == listOf(0x41, pid.code) }?.let(pid::value)
 }
