@@ -13,26 +13,29 @@ class FoundationNavigationTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     @Test fun destinationsShowHonestEmptyStatesAndBackReturnsHome() {
-        compose.onNodeWithText("Tracks").performClick()
+        compose.onNodeWithContentDescription("Tracks").performClick()
         compose.onNodeWithText("Track library").assertIsDisplayed()
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("TRACKDASH").assertIsDisplayed()
-        compose.onNodeWithText("Sessions").performClick()
-        compose.onNodeWithText("No recorded sessions").assertIsDisplayed()
-        compose.onNodeWithText("Diagnostics").performClick()
-        compose.onNodeWithText("OBD · Disconnected").assertIsDisplayed()
-        compose.onNodeWithText("Home").performClick()
-        compose.onNodeWithText("GPS lap timer").assertIsSelected()
+        compose.onNodeWithContentDescription("Sessions").performClick()
+        compose.onNodeWithText("Session history").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Home").performClick()
+        compose.onNodeWithText("Vehicles & settings").performClick()
+        compose.onNodeWithText("Connection status").performScrollTo().performClick()
+        compose.onNodeWithText("Vehicle data").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNode(hasText("GPS lap timer") and hasClickAction()).assertIsSelected()
     }
 
     @Test fun modeSurvivesNavigationAndActivityRecreation() {
         compose.onNodeWithText("Vehicle dashboard").performClick()
-        compose.onNodeWithText("Vehicle dashboard").assertIsSelected()
-        compose.onNodeWithText("Tracks").performClick()
-        compose.onNodeWithText("Home").performClick()
-        compose.onNodeWithText("Vehicle dashboard").assertIsSelected()
+        compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
+        compose.onNodeWithContentDescription("Tracks").performClick()
+        compose.onNodeWithContentDescription("Home").performClick()
+        compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText("Vehicle dashboard").assertIsSelected()
+        compose.onNode(hasText("Vehicle dashboard") and hasClickAction()).assertIsSelected()
     }
 
     @Test fun landscapeNavigationRemainsUsable() {
@@ -40,11 +43,19 @@ class FoundationNavigationTest {
             it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
         compose.waitForIdle()
-        compose.onNodeWithText("Tracks").performClick()
+        compose.onNodeWithContentDescription("Collapse navigation").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open navigation").assertDoesNotExist()
+        compose.onNodeWithContentDescription("TrackDash").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tracks").performClick()
         compose.onNodeWithText("Track library").assertIsDisplayed()
-        compose.onNodeWithText("Home").performClick()
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Vehicles & settings").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Track library").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Home").performClick()
         compose.onNodeWithText("Combined telemetry").performScrollTo().performClick()
-        compose.onNodeWithText("Combined telemetry").assertIsSelected()
+        compose.onNode(hasText("Combined telemetry") and hasClickAction()).assertIsSelected()
     }
 }
 

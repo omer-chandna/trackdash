@@ -18,7 +18,9 @@ class VehicleAlertsTest {
         val engine = engine()
         assertTrue(engine.evaluate(sample(0, 111.0)).isEmpty())
         assertTrue(engine.evaluate(sample(1, 111.0)).isEmpty())
-        assertEquals(1, engine.evaluate(sample(2, 111.0)).size)
+        val alert = engine.evaluate(sample(2, 111.0)).single()
+        assertEquals(AlertCategory.ENGINE_SAFETY, alert.category)
+        assertEquals(SensorId.COOLANT_TEMPERATURE, alert.sensor)
     }
 
     @Test fun `brief excursion resets the hold time`() {
@@ -50,14 +52,18 @@ class VehicleAlertsTest {
         for (pressure in listOf(OilPressureStatus.UNKNOWN, OilPressureStatus.UNAVAILABLE, OilPressureStatus.OK)) {
             assertTrue(engine.evaluate(sample(0, 90.0).copy(oilPressure = pressure)).isEmpty())
         }
-        assertEquals(AlertSeverity.CRITICAL, engine.evaluate(sample(0, 90.0).copy(oilPressure = OilPressureStatus.LOW)).single().severity)
+        val alert = engine.evaluate(sample(0, 90.0).copy(oilPressure = OilPressureStatus.LOW)).single()
+        assertEquals(AlertSeverity.CRITICAL, alert.severity)
+        assertEquals(AlertCategory.ENGINE_SAFETY, alert.category)
     }
 
     @Test fun `disconnect resets thresholds and produces only connection warning`() {
         val engine = engine()
         engine.evaluate(sample(0, 120.0))
         engine.evaluate(sample(2, 120.0))
-        assertEquals("connection", engine.evaluate(SimulatedVehicleSource.sampleAt(0, 3_000_000_000, SimulationScenario.DISCONNECTED)).single().id)
+        val disconnected = engine.evaluate(SimulatedVehicleSource.sampleAt(0, 3_000_000_000, SimulationScenario.DISCONNECTED)).single()
+        assertEquals("connection", disconnected.id)
+        assertEquals(AlertCategory.CONNECTIVITY, disconnected.category)
         assertTrue(engine.evaluate(sample(4, 120.0)).isEmpty())
     }
 

@@ -32,6 +32,24 @@ All synthetic data is identified as simulation in the UI and export.
 background and does not record. Session recording continues with a foreground
 service through navigation, rotation and normal backgrounding.
 
+## Driving display and warnings
+
+The landscape rally display uses large white numbers on black, compact controls,
+and 12 green/yellow/red RPM lights. Configure **Shift RPM / redline** for a real
+vehicle profile; no vehicle limit is assumed. Reaching that limit flashes a
+full-screen **SHIFT** prompt three times, followed by a steady prompt until RPM
+falls more than 200 RPM below the limit.
+
+New engine-safety warnings flash individually, three pulses per warning. Low oil
+pressure has first priority among simultaneous warnings; additional warnings join
+the queue. Cleared warnings leave the queue, and active warning banners/gauge
+highlights remain until the conditions clear. GPS loss and stale/disconnected data
+show status warnings without triggering the engine-safety flash.
+
+Home, Tracks, and Sessions use an icon rail in landscape and an icon-only bottom
+bar in portrait. Connection Status is available through **Settings → Maps & advanced**.
+Back leaves an active recording running; **Stop and save** explicitly ends it.
+
 ## Connect the owner's Veepeak OBDCheck BLE
 
 1. Plug the adapter into the stationary vehicle and turn on ignition.
@@ -45,7 +63,7 @@ service through navigation, rotation and normal backgrounding.
 Bluetooth even though the product name includes BLE. Only read-only standard
 OBD queries are sent. Sensor availability comes from the responding ECU, not the
 vehicle name. Unsupported oil temperature remains unavailable; oil pressure is
-never fabricated. Physical Veepeak/BMW validation is still required.
+never fabricated. Physical adapter and vehicle validation is still required.
 
 An **experimental OBDLink CX BLE** option uses its documented UART service and
 acknowledged writes. It is not a generic driver for every BLE adapter and has not
@@ -69,7 +87,7 @@ map tiles. Imported packages may lack resources; check coverage before use.
 
 Create vehicle profiles, choose gauges and their order, size and bar presentation,
 units, keep-awake/fullscreen behavior, and warning settings. Temperature/RPM
-thresholds are user supplied; there are no assumed BMW safety limits. Recording
+thresholds are user supplied; there are no assumed manufacturer safety limits. Recording
 snapshots settings at start. Session notes, complete samples, warnings and track
 snapshots stay locally in Room. Android backup is disabled.
 
@@ -78,12 +96,16 @@ valid best/average lap, sectors, and two-lap comparisons by elapsed time. CSV is
 written through Android's document picker in bounded pages with timestamps,
 canonical units, source and availability status. Stop a session before export.
 
+Use the trash action in session history or session details to permanently delete
+a finished or interrupted session and its samples, laps, events, and notes. A
+confirmation is required, and active recordings cannot be deleted.
+
 ## Validation and remaining work
 
 JVM tests, Android 10 emulator tests, lint and debug builds are documented in
 [testing](docs/testing.md). This is a development build, not a hardware-qualified
-release. Proprietary BMW enhanced commands require verified ECU identifiers and
-captures; they are deliberately not guessed. Modern-device foreground-service,
+release. Proprietary enhanced commands require verified ECU identifiers and
+captures for each supported vehicle; they are deliberately not guessed. Modern-device foreground-service,
 Bluetooth, GNSS accuracy, thermal/battery and long-run tests remain release gates.
 See [roadmap](docs/roadmap.md), [limitations](docs/known-limitations.md),
 [architecture](docs/architecture.md), and [integration review](docs/reviews/integrated-telemetry.md).

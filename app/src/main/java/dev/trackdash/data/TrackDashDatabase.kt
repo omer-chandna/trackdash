@@ -26,6 +26,7 @@ interface TrackDashDao {
     @Query("SELECT * FROM vehicles ORDER BY name") fun vehicles(): Flow<List<VehicleRow>>
     @Query("SELECT * FROM vehicles WHERE id = :id") suspend fun vehicle(id: String): VehicleRow?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveVehicle(vehicle: VehicleRow)
+    @Query("DELETE FROM vehicles WHERE id = :id") suspend fun deleteVehicle(id: String): Int
     @Query("SELECT * FROM sessions ORDER BY startedMillis DESC") fun sessions(): Flow<List<SessionRow>>
     @Query("SELECT * FROM sessions WHERE id = :id") suspend fun session(id: String): SessionRow?
     @Insert suspend fun insertSession(session: SessionRow)
@@ -39,6 +40,8 @@ interface TrackDashDao {
     fun events(sessionId: String, kind: String): Flow<List<SampleRow>>
     @Query("SELECT COUNT(*) FROM samples WHERE sessionId = :sessionId") fun sampleCount(sessionId: String): Flow<Long>
     @Query("DELETE FROM sessions WHERE id = :id") suspend fun deleteSession(id: String)
+    @Query("DELETE FROM sessions WHERE id = :id AND status != 'RECORDING'")
+    suspend fun deleteFinishedSession(id: String): Int
 }
 
 @Database(entities = [TrackRow::class, VehicleRow::class, SessionRow::class, SampleRow::class], version = 1, exportSchema = true)

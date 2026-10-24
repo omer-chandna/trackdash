@@ -1,9 +1,9 @@
 # Roadmap
 
-Authoritative status as of 2026-10-14. The owner authorized direct incremental
-commits to main and a final push. COMPLETED below means the stated software scope
-is integrated and tested; physical verification is listed separately. This is a
-development build, not a claim that every hardware/release acceptance gate passed.
+Authoritative status as of 2026-10-24. COMPLETED below describes software already
+integrated on main; the rally refresh is submitted separately for review and
+remains IN_REVIEW until approved integration. Physical verification is listed
+separately. This is a development build, not a claim that hardware/release gates passed.
 
 | Feature | Status | Integration | Acceptance evidence / remaining limits |
 |---|---|---|---|
@@ -18,20 +18,32 @@ development build, not a claim that every hardware/release acceptance gate passe
 | Standard OBD protocol/discovery | COMPLETED | main | PID formulas/capabilities per ECU, framing and CAN VIN fixtures; no enhanced commands assumed |
 | Classic Bluetooth | IN_REVIEW | main | RFCOMM, cancel/timeout/disconnect/retries, Veepeak Android setup; physical adapter validation pending |
 | Polling | IN_REVIEW | main | Serialized priority intervals, stale status, latency/errors, retry backoff; real throughput and configurable per-PID rates remain follow-up |
-| Vehicle profiles | COMPLETED | main | Saved identities, 2009 BMW N52 preset, detected VIN/capabilities and generic fallback |
+| Vehicle profiles | COMPLETED | main | Saved user-created identities, detected VIN/capabilities and generic fallback |
 | Dashboard/settings | COMPLETED | main | Per-profile gauge selection/order, numeric/bar display, size, units, keep-awake/fullscreen and shift threshold |
 | Alerts | COMPLETED | main | Explicit per-profile temperature/RPM rules, hold/hysteresis, pressure/disconnect/stale/GPS loss, optional audio and persisted transitions |
 | History/analysis/export | COMPLETED | main | Notes, valid best/average, sectors, bounded charts/path, exact peaks, elapsed-time comparison and paged CSV; regression tests |
 | Simulation recording/fault controls | COMPLETED | main | Pace integration, jump/dropout/vehicle faults, lap/warning persistence and export |
-| BMW enhanced diagnostics | BLOCKED | main evidence register | Exact ECU service identifiers/scaling/captures not verified; oil-pressure switch remains unavailable in generic OBD |
+| Enhanced manufacturer sensors | BLOCKED | protocol evidence | Exact ECU service identifiers/scaling/captures are not verified; oil-pressure switch remains unavailable in generic OBD |
 | BLE compatibility | IN_REVIEW | main | Experimental vendor-documented OBDLink CX driver and scan/recovery; physical validation pending; Veepeak uses Classic |
 | Release preparation | IN_PROGRESS | main | Build/tests/docs/screenshots prepared; physical/current-Android/performance gates and owner license decision pending |
 
+## Rally refresh awaiting integration
+
+Branch: `codex/rally-dashboard-warning-manager`. Review notes and screenshots:
+[rally dashboard refresh](reviews/rally-dashboard-refresh.md).
+
+| Feature | Status | Acceptance evidence / remaining limits |
+|---|---|---|
+| Rally display and manual-car focus | IN_REVIEW | Large adaptive white-on-black readings, 12 RPM lights, explicit configured redline, SHIFT pulses/hysteresis; no gear UI |
+| Sequential engine warnings | IN_REVIEW | Three-pulse cycles per activation, pressure priority, queue clear/recurrence, saved rotation state, connectivity exclusion, safety-before-SHIFT tests |
+| Landscape navigation and detail flows | IN_REVIEW | Fixed icon rail, portrait bottom navigation, advanced Connection Status, visible/system Back and continuing foreground recording |
+| Session deletion and neutral vehicle profiles | IN_REVIEW | Conditional DAO deletion, confirmation/cascade tests, active-session protection, exact legacy preset cleanup preserving user profiles |
+
 ## Remaining acceptance work
 
-- Exercise Veepeak OBDCheck BLE with the owner's 2009 128i: pairing, ECU selection,
+- Exercise a supported Classic Bluetooth adapter with a target vehicle: pairing, ECU selection,
   supported PIDs, oil-temperature availability, real rates and disconnect recovery.
-- Validate enhanced BMW identifiers with protocol evidence and read-only captures
+- Validate any enhanced manufacturer identifiers with protocol evidence and read-only captures
   before adding a provider; commercial-app support is not sufficient evidence.
 - Qualify the experimental CX BLE driver with actual hardware and pairing events.
 - Test current Android permission/service timeouts, outdoor GNSS, battery/thermal

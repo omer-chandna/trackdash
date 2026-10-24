@@ -13,7 +13,7 @@ emulator job on main pushes and PRs. Remote CI status must be checked separately
 
 ## Integrated coverage
 
-The JVM suite contains 51 tests: telemetry validation, replay/fault/lifecycle
+The JVM suite contains 61 tests (46 core, 15 app): telemetry validation, replay/fault/lifecycle
 behavior, repository cancellation, alert hysteresis/holds/missing values, finite
 geometry, monotonic timestamp/gap handling, lap/sector validity, track JSON,
 standard PID formulas and discovery, CAN VIN sequence/length, bounded fragmented
@@ -21,15 +21,32 @@ responses, read-only command policy, CSV escaping and spreadsheet text handling.
 
 Android tests run on the API 29 x86_64 Pixel 2 emulator with WHPX. Coverage includes:
 
-- Room track/session/sample paging, recovery and cascade deletion.
+- Room track/session/sample paging, recovery, guarded deletion of non-recording
+  sessions, sample cascades, and legacy preset cleanup preserving custom vehicles.
 - Combined recording in background, valid simulated lap and low-pressure warning,
   drained writes on stop, and exported source/timestamp metadata.
 - Long GPS-only analysis: exact maxima and bounded chart/path storage.
 - Track editing/reuse, navigation/recreation, simulation controls and warning edits.
 - Active recording landscape layout and selecting modes by their full row.
+- Three-pulse engine warnings presented individually, queue order and priority,
+  saved-state restoration without replay, SHIFT pulses/steady prompt/hysteresis,
+  and non-flashing connectivity/data-quality messages.
+- Icon-only landscape/portrait navigation, advanced Connection Status, detail Back
+  controls, confirmation/cancellation for session deletion, and continuing active recording after Back.
 
-The last added UI test exposed a label-selection bug which was fixed before the
-final rerun. Reports and final result counts are in the integration review.
+## Final rally-refresh verification (2026-10-24)
+
+On `codex/rally-dashboard-warning-manager`, the complete command
+`:core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:connectedDebugAndroidTest`
+passed using the pinned local JDK/SDK, Gradle wrapper, and the API 29 x86_64 emulator.
+All 61 JVM tests and 18 Android tests passed, with no failures or skipped Android
+tests. Lint reported zero errors and one Compose modifier-parameter style warning
+in `StatusChip`. The debug APK assembled successfully, and `git diff --check` passed.
+
+Landscape screenshots were inspected for readable values, complete gauge rows,
+and the full-screen/steady SHIFT treatments. See the
+[refresh review](reviews/rally-dashboard-refresh.md) for captured previews and scope.
+Remote PR CI status is independent of these local results.
 
 ## Toolchain on this workstation
 

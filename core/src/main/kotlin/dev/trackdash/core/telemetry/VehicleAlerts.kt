@@ -3,7 +3,14 @@ package dev.trackdash.core.telemetry
 import dev.trackdash.core.*
 
 enum class AlertSeverity { WARNING, CRITICAL }
-data class VehicleAlert(val id: String, val message: String, val severity: AlertSeverity)
+enum class AlertCategory { ENGINE_SAFETY, CONNECTIVITY, DATA_QUALITY, SHIFT }
+data class VehicleAlert(
+    val id: String,
+    val message: String,
+    val severity: AlertSeverity,
+    val category: AlertCategory,
+    val sensor: SensorId? = null,
+)
 
 /** No real-vehicle default: limits must be supplied by the user or verified profile. */
 data class TemperatureRule(
@@ -34,11 +41,11 @@ class VehicleAlertEngine(private val rules: List<TemperatureRule>) {
         lastTimestamp = now
         if (!sample.connected) {
             reset()
-            return listOf(VehicleAlert("connection", "Vehicle data unavailable", AlertSeverity.WARNING))
+            return listOf(VehicleAlert("connection", "Vehicle data unavailable", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
         }
         val alerts = mutableListOf<VehicleAlert>()
         if (sample.oilPressure == OilPressureStatus.LOW) {
-            alerts += VehicleAlert("oil-pressure", "Low oil-pressure switch", AlertSeverity.CRITICAL)
+            alerts += VehicleAlert("oil-pressure", "Low oil pressure", AlertSeverity.CRITICAL, AlertCategory.ENGINE_SAFETY)
         }
         rules.forEach { rule ->
             val reading = sample.readings.firstOrNull { it.sensorId == rule.sensor }
@@ -64,7 +71,8 @@ class VehicleAlertEngine(private val rules: List<TemperatureRule>) {
                     SensorId.INTAKE_TEMPERATURE -> "Intake"
                     else -> rule.sensor.name
                 }
-                alerts += VehicleAlert(rule.sensor.name, "$label temperature above configured limit", AlertSeverity.WARNING)
+                alerts += VehicleAlert(rule.sensor.name, "$label temperature above configured limit", AlertSeverity.WARNING,
+                    AlertCategory.ENGINE_SAFETY, rule.sensor)
             }
         }
         return alerts

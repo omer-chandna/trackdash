@@ -17,7 +17,7 @@ Commands are serialized. Desired intervals range from 100 ms RPM to 2 s ambient/
 voltage; real rates depend on the adapter/vehicle latency. Readings older than 5 s
 are marked stale. The scheduler waits for each response and backs off/reconnects
 on failures, exhausting three consecutive connection/poll failures. Successful
-reads reset retries. Diagnostics show latency, counts, errors, supported PIDs,
+reads reset retries. Connection Status shows latency, counts, errors, supported PIDs,
 firmware, protocol and VIN status. No clearing/coding/service-write commands exist.
 
 ## Owner's adapter: Veepeak OBDCheck BLE

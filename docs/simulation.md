@@ -17,7 +17,7 @@ complete laps. Simulation uses monotonic acquisition and wall-clock timestamps.
 Vehicle samples run at 10 Hz with deterministic RPM, gear, temperatures and other
 standard sensors. Fault controls deliberately clear health/value availability.
 
-All UI/export data is labelled simulated. The model is not a calibrated BMW N52
+All UI/export data is labelled simulated. The model is not a calibrated vehicle
 or a promise of real GNSS/OBD rates. Recording uses selected profile warning limits;
 blank temperature/RPM settings disable those thresholds. Low-pressure/disconnect
 rules are available when warnings are enabled. Track/settings snapshots, warnings,

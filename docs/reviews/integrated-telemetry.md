@@ -12,7 +12,7 @@ recording, persistent configuration, review, charts and exports.
 - Local Room v1 schema and bounded queued writes; no background recording in an
   Activity. Interrupted sessions are retained and labelled on next startup.
 - Standard advertised OBD data comes first. The owner's Veepeak uses documented
-  Android Classic transport. CX BLE is explicitly experimental. No guessed BMW
+  Android Classic transport. CX BLE is explicitly experimental. No guessed manufacturer
   diagnostic identifiers or fabricated pressure values.
 - Source/time/status metadata survives CSV export. Charts are bounded overviews;
   exact peaks are computed while streaming the full session.
@@ -28,8 +28,8 @@ Android lint are built from the integrated source. See testing.md for final coun
 
 ## Remaining risks
 
-Physical Veepeak/BMW, BLE pairing, current Android service behavior and outdoor
-GNSS/performance checks remain. Enhanced BMW commands are blocked by missing
+Physical adapter/vehicle, BLE pairing, current Android service behavior and outdoor
+GNSS/performance checks remain. Enhanced manufacturer commands are blocked by missing
 verified protocol evidence. Offline packages/provider credentials were not supplied.
 The owner has not selected a project license. No public release is created.
 

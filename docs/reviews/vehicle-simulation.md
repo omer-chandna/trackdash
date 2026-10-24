@@ -19,7 +19,7 @@ voltage and discrete oil-pressure state through the shared vehicle source.
 - Critical low-pressure and warning data-loss states from the sample data.
 - Responsive numeric gauges, RPM bar, four-column landscape and two-column portrait.
 - Navigation/rotation retain the demo; app backgrounding and ViewModel destruction stop it.
-- Diagnostics shows the simulator's sample count separately from physical source status.
+- Connection Status shows the simulator's sample count separately from physical source status.
 
 The reusable repository and alert engine remain in the Kotlin core module. UI
 conversion from m/s to km/h occurs only during presentation. Vehicle sample batches
@@ -53,7 +53,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`.
 ## Remaining work
 
 No physical adapter/vehicle/GNSS capability has been tested or implemented. The
-simulator is not a BMW physics model. GPS simulation and real gate/lap/sector
+simulator is not a calibrated vehicle physics model. GPS simulation and real gate/lap/sector
 algorithms are next, followed by map editing and recording. DataStore settings,
 Room storage, audible alerts, alert history, dashboard customization, background
 recording and CSV export remain future increments. Limits are session-local.

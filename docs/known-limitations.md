@@ -4,7 +4,7 @@
   does not prove target API 37 foreground-service, radio or permission behavior.
 - The owner's Veepeak OBDCheck BLE is configured through Classic Bluetooth as its
   vendor directs for Android. Actual adapter/ECU compatibility and rates need a car test.
-- BMW proprietary oil temperature/pressure identifiers are unverified and absent.
+- Proprietary oil temperature/pressure identifiers are unverified and absent.
   Generic 015C requires advertised support; gear and oil-pressure switch remain
   unavailable. Never interpret a missing switch reading as healthy oil pressure.
 - The OBDLink CX BLE driver is experimental and uses a documented device-specific
@@ -16,7 +16,7 @@
 - Real GPS sampling rate/accuracy depends on the phone and sky view. Timing gates
   use a local metric model limited to ±85° latitude. Maps never improve GNSS accuracy.
 - Simulation has one circular circuit, adjustable pace and explicit faults. It is
-  not a BMW performance model and does not yet simulate arbitrary saved tracks/drift.
+  not a calibrated vehicle model and does not yet simulate arbitrary saved tracks/drift.
 - Offline packages must be licensed MapLibre offline-region databases, not generic
   MBTiles. Packages/providers were not externally downloaded or field-tested.
   Online map/search providers are user configured; access/coverage can fail.
