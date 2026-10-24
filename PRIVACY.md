@@ -4,13 +4,19 @@ TrackDash is local-first. No project-operated cloud backend, account registratio
 advertising SDK, analytics service, or automatic crash uploader is configured.
 The Android Internet permission supports services you explicitly configure.
 
+The optional sharing and setup-discovery behavior below describes companion
+[PR #2](https://github.com/omer-chandna/trackdash/pull/2). It is not present in a
+foundation-only build. Merge the functional companion before the open-source
+foundation for the complete product; ordinary local storage/export behavior
+described here also applies without that companion.
+
 ## Stored on the phone
 
 The app-private Room database stores vehicle profiles (including detected VIN
 when available), tracks/gates, recordings, telemetry samples, timestamps, GPS
 coordinates/quality, laps, warning events, notes and snapshots of session settings.
 DataStore holds display/limit settings and configured map/search providers.
-Sharing uses separate app-private preferences with an encrypted authorization
+With that companion integrated, sharing uses separate app-private preferences with an encrypted authorization
 value. Setup choices are retained in activity state, not published. Android backup/device transfer is disabled in the app
 manifest and extraction rules. Device/OS access controls still apply; data is not
 a separately encrypted session vault.
@@ -36,7 +42,7 @@ terms and privacy policy you accept. A map style may load its own tile, glyph an
 sprite hosts. Offline map databases must be lawfully obtained and may contain
 provider-specific metadata. Timing and local recording work without online maps.
 
-## Optional live sharing
+## Optional live sharing (companion PR #2)
 
 Sharing is **off by default**, applies to new live recordings, and needs an explicit
 HTTPS receiver URL. It does not upload historical sessions. The fixed sensor packet
@@ -49,7 +55,8 @@ put credentials in the receiver URL. Endpoint validation rejects URL user info,
 query strings and fragments; redirects are not followed. A small in-memory queue
 may drop packets when slow/offline; it is not a durable upload backlog. Receiver
 errors do not stop local recording. Local session replay never sends live packets.
-See the exact [wire format and receiver guide](docs/telemetry-sharing.md).
+See the exact [wire format and receiver guide](https://github.com/omer-chandna/trackdash/blob/eace92219670cf0dae0c01ed25dd6fd4dc4b0071/docs/telemetry-sharing.md)
+at the reviewed companion commit.
 
 Disable sharing for future recordings to stop sending to that receiver. To change
 settings during an existing recording, stop and save it, then start another. Ask

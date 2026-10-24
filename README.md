@@ -5,6 +5,14 @@ No account or cloud service is required. Android 10+ (API 29),
 compile/target API 37. Version 0.3 integrates simulation, GPS timing, track editing,
 foreground recording, standard OBD, analysis, and local export.
 
+> Integration note: this open-source foundation can be reviewed independently.
+> The source-recovery fixes, setup sensor discovery/readiness, session replay and
+> optional sharing described below are supplied by companion
+> [PR #2](https://github.com/omer-chandna/trackdash/pull/2). Merge PR #2 first, then
+> the foundation, to obtain the complete monitoring milestone. A foundation-only
+> build does not yet include those companion features; its offline license viewer
+> and existing dashboard/recording features are usable independently.
+
 ![Landscape rally dashboard](docs/screenshots/rally-demo-landscape.png)
 
 **Development software, not an engine-protection system.** TrackDash supplements,
@@ -139,11 +147,12 @@ See [roadmap](docs/roadmap.md), [limitations](docs/known-limitations.md),
 
 ## Replay and optional sharing
 
-Use local, read-only [session replay](docs/session-replay.md) to investigate a
+With companion PR #2 integrated, use local, read-only
+[session replay](https://github.com/omer-chandna/trackdash/blob/eace92219670cf0dae0c01ed25dd6fd4dc4b0071/docs/session-replay.md) to investigate a
 saved recording without connecting to a vehicle. Original sample timestamps and
 availability are retained; replay never writes a new session or shares packets.
 
-Optional [sensor-only HTTPS sharing](docs/telemetry-sharing.md) is off by default
+Optional [sensor-only HTTPS sharing](https://github.com/omer-chandna/trackdash/blob/eace92219670cf0dae0c01ed25dd6fd4dc4b0071/docs/telemetry-sharing.md) in that companion is off by default
 and sends a fixed allowlisted packet to a receiver you control. It excludes GPS
 coordinates, VIN, wall-clock time, session/vehicle identifiers, track names and
 notes. The receiver still sees network IP. A slow or unavailable receiver never
