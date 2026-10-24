@@ -13,6 +13,10 @@ import androidx.compose.ui.unit.dp
 import dev.trackdash.core.simulation.SimulationScenario
 import dev.trackdash.data.SimulationControls
 
+internal fun gpsSpeedForDisplay(state: RecordingState): Double? = state.gps?.takeIf {
+    state.gpsError == null && state.gpsAgeSeconds?.let { age -> age in 0.0..3.0 } == true && it.horizontalAccuracyMeters <= 25.0
+}?.speedMetersPerSecond
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingDashboard(state: RecordingState, controls: SimulationControls,
@@ -53,7 +57,7 @@ private fun LandscapeDashboard(state: RecordingState) {
                 LiveGauges(state.vehicle, state.dashboard, state.alerts, state.shiftActive,
                     modifier = Modifier.weight(0.60f).fillMaxHeight(), compact = true)
             } else {
-                val speed = state.gps?.speedMetersPerSecond?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)
+                val speed = gpsSpeedForDisplay(state)?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)
                 RallyGaugeGrid(listOf(
                     RallyReading("SPEED", speed?.let { "%.0f".format(it) } ?: "—", if (state.dashboard.mph) "mph" else "km/h"),
                     RallyReading("LAPS", state.laps.toString()),
@@ -62,6 +66,7 @@ private fun LandscapeDashboard(state: RecordingState) {
             }
         }
         state.error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        MonitoringStatus(state)
         state.lastLap?.takeUnless { it.valid }?.let { Text("Invalid lap: ${it.invalidReasons.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
         Text("${state.laps} LAPS · ${state.samples} SAMPLES${state.gps?.let { " · GPS ±%.1f m".format(it.horizontalAccuracyMeters) } ?: ""}",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -72,6 +77,9 @@ private fun LandscapeDashboard(state: RecordingState) {
 private fun PortraitDashboard(state: RecordingState, onOpenControls: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         AlertBanners(state.alerts)
+        MonitoringStatus(state)
+        if (state.usesGps) RallyMetric(RallyReading("GPS SPEED", gpsSpeedForDisplay(state)?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)?.let { "%.0f".format(it) } ?: "—",
+            if (state.dashboard.mph) "mph" else "km/h"), Modifier.fillMaxWidth().height(112.dp))
         RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos)), Modifier.fillMaxWidth().height(144.dp), maximumSp = 80)
         RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
         RallyMetric(RallyReading("BEST LAP", state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
@@ -79,6 +87,23 @@ private fun PortraitDashboard(state: RecordingState, onOpenControls: () -> Unit)
         if (state.simulated) OutlinedButton(onClick = onOpenControls) { Text("Simulation controls") }
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
+}
+
+@Composable
+private fun MonitoringStatus(state: RecordingState) {
+    val status = buildList {
+        if (state.usesGps) add(when {
+            state.gpsError != null -> "GPS UNAVAILABLE · RETRYING"
+            state.gps == null -> "GPS ACQUIRING"
+            state.gpsAgeSeconds?.let { it !in 0.0..3.0 } == true -> "GPS STALE"
+            state.gps.horizontalAccuracyMeters > 25 -> "GPS DEGRADED"
+            else -> "GPS READY"
+        })
+        if (state.usesVehicle && !state.simulated) add("OIL PRESSURE NOT MONITORED")
+        state.vehicleError?.let { add(it.uppercase()) }
+    }.joinToString(" · ")
+    if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
 }
 
 @Composable

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelStore
 import dev.trackdash.core.OilPressureStatus
 import dev.trackdash.core.simulation.*
 import dev.trackdash.core.telemetry.AcquisitionStatus
+import dev.trackdash.core.telemetry.AlertCondition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -54,7 +55,8 @@ class SimulationViewModelTest {
         advanceTimeBy(100)
         runCurrent()
         assertEquals(OilPressureStatus.UNAVAILABLE, model.state.value.telemetry.sample!!.oilPressure)
-        assertEquals("connection", model.state.value.alerts.single().id)
+        assertTrue(model.state.value.alerts.any { it.id == "connection" })
+        assertEquals(AlertCondition.UNCONFIRMED, model.state.value.alerts.first { it.id == "oil-pressure" }.condition)
         model.selectScenario(SimulationScenario.NORMAL)
         advanceTimeBy(100)
         runCurrent()

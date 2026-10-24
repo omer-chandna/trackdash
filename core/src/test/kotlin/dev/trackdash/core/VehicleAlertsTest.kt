@@ -57,14 +57,37 @@ class VehicleAlertsTest {
         assertEquals(AlertCategory.ENGINE_SAFETY, alert.category)
     }
 
-    @Test fun `disconnect resets thresholds and produces only connection warning`() {
+    @Test fun `disconnect retains unresolved established warning until fresh recovery`() {
         val engine = engine()
         engine.evaluate(sample(0, 120.0))
         engine.evaluate(sample(2, 120.0))
-        val disconnected = engine.evaluate(SimulatedVehicleSource.sampleAt(0, 3_000_000_000, SimulationScenario.DISCONNECTED)).single()
+        val disconnectedAlerts = engine.evaluate(SimulatedVehicleSource.sampleAt(0, 3_000_000_000, SimulationScenario.DISCONNECTED))
+        val disconnected = disconnectedAlerts.first { it.id == "connection" }
         assertEquals("connection", disconnected.id)
         assertEquals(AlertCategory.CONNECTIVITY, disconnected.category)
-        assertTrue(engine.evaluate(sample(4, 120.0)).isEmpty())
+        assertEquals(AlertCondition.UNCONFIRMED, disconnectedAlerts.first { it.sensor == SensorId.COOLANT_TEMPERATURE }.condition)
+        assertEquals(AlertCondition.ACTIVE, engine.evaluate(sample(4, 120.0)).single().condition)
+        assertTrue(engine.evaluate(sample(5, 107.0)).isEmpty())
+    }
+
+    @Test fun `stale temperature keeps an established warning unresolved`() {
+        val engine = engine()
+        engine.evaluate(sample(0, 120.0))
+        engine.evaluate(sample(2, 120.0))
+        val alert = engine.evaluate(sample(3, 120.0, SensorStatus.STALE)).single()
+        assertEquals(AlertCondition.UNCONFIRMED, alert.condition)
+        assertTrue(alert.message.contains("unresolved"))
+        assertTrue(engine.evaluate(sample(4, 107.0)).isEmpty())
+    }
+
+    @Test fun `low pressure cannot be cleared by unknown or unavailable pressure`() {
+        val engine = VehicleAlertEngine(emptyList())
+        engine.evaluate(sample(0, 90.0).copy(oilPressure = OilPressureStatus.LOW))
+        listOf(OilPressureStatus.UNKNOWN, OilPressureStatus.UNAVAILABLE).forEachIndexed { index, status ->
+            assertEquals(AlertCondition.UNCONFIRMED,
+                engine.evaluate(sample(index + 1L, 90.0).copy(oilPressure = status)).single().condition)
+        }
+        assertTrue(engine.evaluate(sample(4, 90.0).copy(oilPressure = OilPressureStatus.OK)).isEmpty())
     }
 
     @Test fun `backward timestamps restart pending duration`() {

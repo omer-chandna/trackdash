@@ -3,6 +3,7 @@ package dev.trackdash.recording
 import dev.trackdash.core.SensorId
 import dev.trackdash.core.telemetry.AlertCategory
 import dev.trackdash.core.telemetry.AlertSeverity
+import dev.trackdash.core.telemetry.AlertCondition
 import dev.trackdash.core.telemetry.VehicleAlert
 import org.junit.Assert.*
 import org.junit.Test
@@ -86,5 +87,15 @@ class DashboardWarningManagerTest {
         assertEquals("LOW OIL PRESSURE", warningHeadline(pressure))
         assertEquals("HIGH OIL TEMP", warningHeadline(oil))
         assertEquals("HIGH COOLANT TEMP", warningHeadline(coolant))
+    }
+
+    @Test fun `unresolved data loss keeps the warning but cancels its flashes`() {
+        val active = baseline().update(listOf(oil), false)
+        assertTrue(active.pulseVisible)
+        val unresolved = oil.copy(condition = AlertCondition.UNCONFIRMED)
+        val lost = active.update(listOf(unresolved), false)
+        assertFalse(lost.busy)
+        assertFalse(lost.update(listOf(oil), false).busy)
+        assertFalse(baseline().update(listOf(unresolved), false).busy)
     }
 }

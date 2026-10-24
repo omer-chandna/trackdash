@@ -31,7 +31,8 @@ data class RecordingState(val sessionId: String? = null, val active: Boolean = f
     val obd: ObdDiagnostics = ObdDiagnostics(), val rejectedFixes: Int = 0,
     val gpsRateHz: Double = 0.0, val theoreticalBestNanos: Long? = null,
     val dashboard: DashboardPreferences = DashboardPreferences(), val transport: String = "None",
-    val shiftActive: Boolean = false)
+    val shiftActive: Boolean = false, val usesGps: Boolean = true, val usesVehicle: Boolean = false,
+    val gpsError: String? = null, val vehicleError: String? = null)
 
 internal fun nextShiftState(current: Boolean, rpm: Double?, limit: Double?): Boolean = when {
     rpm == null || limit == null -> false
@@ -46,9 +47,12 @@ class RecordingService : Service() {
     private val graph get() = application as TrackDashApplication
     private var recording: Job? = null
     private var ending = false
+    private var timedOut = false
+    private var explicitStop = false
+    private var interrupted = false
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "STOP") { if (recording == null) stopSelf() else recording?.cancel(); return START_NOT_STICKY }
+        if (intent?.action == "STOP") { explicitStop = true; if (recording == null) stopSelf() else recording?.cancel(); return START_NOT_STICKY }
         if (recording != null || ending) return START_NOT_STICKY
         val simulated = intent?.getBooleanExtra("simulated", true) ?: true
         val mode = runCatching { OperatingMode.valueOf(intent?.getStringExtra("mode") ?: "GPS_LAP_TIMER") }.getOrDefault(OperatingMode.GPS_LAP_TIMER)
@@ -67,16 +71,19 @@ class RecordingService : Service() {
                 id = UUID.randomUUID().toString()
                 graph.database.dao().insertSession(SessionRow(id, System.currentTimeMillis(), mode = mode.name,
                     simulated = simulated, trackId = track?.id, vehicleId = intent?.getStringExtra("vehicle")))
-                graph.recording.value = RecordingState(id, active = true, simulated = simulated, message = "Recording")
+                graph.recording.value = RecordingState(id, active = true, simulated = simulated, message = "Recording",
+                    usesGps = mode.usesGps, usesVehicle = mode.usesVehicle)
                 capture(id, mode, simulated, track, intent?.getStringExtra("address"), intent?.getStringExtra("vehicle") ?: "", intent?.getBooleanExtra("bleCx", false) ?: false)
             } catch (_: CancellationException) { /* Explicit stop / service destruction. */ }
             catch (error: Exception) { failure = error.message ?: error.javaClass.simpleName }
             finally {
                 ending = true
                 withContext(NonCancellable) {
-                    if (id != null) runCatching { graph.database.dao().endSession(id, System.currentTimeMillis(), if (failure == null) "COMPLETE" else "ERROR") }
+                    if (id != null) runCatching { graph.database.dao().endSession(id, System.currentTimeMillis(),
+                        if (timedOut || interrupted) "INTERRUPTED" else if (failure == null) "COMPLETE" else "ERROR") }
                         .onFailure { failure = "Could not finalize session: ${it.message}" }
-                    graph.recording.update { it.copy(active = false, message = if (failure == null) "Saved" else "Recording failed", error = failure ?: it.error) }
+                    graph.recording.update { it.copy(active = false, shiftActive = false,
+                        message = if (timedOut) "Interrupted by Android service time limit" else if (interrupted) "Recording interrupted" else if (failure == null) "Saved" else "Recording failed", error = failure ?: it.error) }
                     stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
                 }
             }
@@ -97,6 +104,8 @@ class RecordingService : Service() {
         var rpmActive = false
         var vehicleAlerts = emptyList<VehicleAlert>()
         var previousGpsNanos: Long? = null
+        val beganNanos = SystemClock.elapsedRealtimeNanos()
+        var latestVehicle: VehicleSample? = null
         val queue = Channel<SampleRow>(256)
         // Writer outlives producer cancellation long enough to drain every accepted sample.
         val writer = scope.async(Dispatchers.IO) {
@@ -112,11 +121,12 @@ class RecordingService : Service() {
         suspend fun save(kind: String, nanos: Long, wall: Long, payload: String) = queue.send(SampleRow(sessionId = id, elapsedNanos = nanos, wallMillis = wall, kind = kind, payload = payload))
         val timer = track?.let { LapTimer(it) }
         try {
+            // Observe storage failures immediately, even if neither source produces another sample.
+            launch { writer.await() }
             if (track != null) save("track-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), TrackJson.encode(track))
             save("settings-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString(preferences))
             if (mode.usesVehicle) launch {
-                val source: VehicleSource = if (simulated) SimulatedVehicleSource(SystemClock::elapsedRealtimeNanos)
-                    else ObdVehicleSource(this@RecordingService, requireNotNull(address) { "Choose an adapter" }, bleCx)
+                val source = graph.recordingSources.vehicle(this@RecordingService, simulated, address, bleCx)
                 if (source is SimulatedVehicleSource) launch { graph.simulationControls.collect { source.selectScenario(it.vehicleScenario) } }
                 if (source is ObdVehicleSource) launch { source.diagnostics.collect { diagnostics ->
                     graph.recording.update { it.copy(obd = diagnostics) }
@@ -128,26 +138,17 @@ class RecordingService : Service() {
                         }
                     }
                 } }
-                try { source.samples().collect { sample ->
-                    graph.recording.update { it.copy(vehicle = sample) }
-                    vehicleAlerts = alertEngine.evaluate(sample)
-                    val rpm = sample.readings.find { it.sensorId == SensorId.ENGINE_RPM && it.status == SensorStatus.AVAILABLE }?.value
-                    val limit = preferences.rpmLimit
-                    rpmActive = nextShiftState(rpmActive, rpm, limit)
-                    if (sample.readings.any { it.status == SensorStatus.STALE }) vehicleAlerts = vehicleAlerts + VehicleAlert(
-                        "stale-sensors", "Stale vehicle sensor readings", AlertSeverity.WARNING, AlertCategory.DATA_QUALITY)
-                    graph.recording.update { it.copy(shiftActive = rpmActive) }
+                source.samples().recoverAcquisition(onFailure = {
+                    graph.recording.update { state -> state.copy(vehicleError = "Vehicle source unavailable; retrying") }
+                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString("Vehicle source unavailable; retrying"))
+                }).collect { sample ->
+                    latestVehicle = sample
+                    graph.recording.update { it.copy(vehicleError = if (sample.connected) null else "Vehicle data unavailable; reconnecting") }
                     save("vehicle", sample.elapsedRealtimeNanos, System.currentTimeMillis(), Json.encodeToString(sample))
-                } } catch (error: Exception) {
-                    if (error is CancellationException) throw error
-                    if (!mode.usesGps) throw error
-                    graph.recording.update { it.copy(error = "OBD stopped: ${error.message}; GPS recording continues") }
-                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString("OBD: ${error.message}"))
                 }
             }
             if (mode.usesGps) launch {
-                val source: LocationSource = if (simulated) SimulatedGpsSource(SystemClock::elapsedRealtimeNanos, System::currentTimeMillis)
-                    else AndroidGpsSource(this@RecordingService)
+                val source = graph.recordingSources.location(this@RecordingService, simulated)
                 if (source is SimulatedGpsSource) launch {
                     var lastJump = graph.simulationControls.value.gpsJump
                     graph.simulationControls.collect {
@@ -155,7 +156,11 @@ class RecordingService : Service() {
                         if (it.gpsJump != lastJump) { source.jump.value = true; lastJump = it.gpsJump }
                     }
                 }
-                source.fixes().collect { fix ->
+                source.fixes().recoverAcquisition(onFailure = {
+                    timer?.markGap("GPS source unavailable")
+                    graph.recording.update { state -> state.copy(gpsError = "GPS unavailable; retrying", gpsRateHz = 0.0) }
+                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString("GPS source unavailable; retrying"))
+                }).collect { fix ->
                     save("gps", fix.elapsedRealtimeNanos, fix.wallClockMillis, Json.encodeToString(fix))
                     val age = (SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos) / 1e9
                     if (age in 0.0..3.0) timer!!.accept(fix).forEach { lap ->
@@ -163,7 +168,7 @@ class RecordingService : Service() {
                     } else timer!!.markGap("Stale GPS fix")
                     val rate = previousGpsNanos?.let { old -> if (fix.elapsedRealtimeNanos > old) 1e9 / (fix.elapsedRealtimeNanos - old) else 0.0 } ?: 0.0
                     previousGpsNanos = fix.elapsedRealtimeNanos
-                    graph.recording.update { it.copy(gps = fix, lastLap = timer.lastLap, bestLap = timer.bestLap, laps = timer.completedLaps,
+                    graph.recording.update { it.copy(gps = fix, gpsError = null, lastLap = timer.lastLap, bestLap = timer.bestLap, laps = timer.completedLaps,
                         rejectedFixes = timer.rejectedFixes, gpsRateHz = rate, theoreticalBestNanos = timer.theoreticalBestNanos) }
                 }
             }
@@ -172,10 +177,21 @@ class RecordingService : Service() {
                     val now = SystemClock.elapsedRealtimeNanos()
                     val age = graph.recording.value.gps?.let { (now - it.elapsedRealtimeNanos) / 1e9 }
                     if (age != null && age > 3) timer?.markGap()
+                    val effective = latestVehicle?.atMonitoringTime(now)
+                    vehicleAlerts = effective?.let(alertEngine::evaluate) ?: emptyList()
+                    val rpm = effective?.readings?.find { it.sensorId == SensorId.ENGINE_RPM && it.status == SensorStatus.AVAILABLE }?.value
+                    rpmActive = nextShiftState(rpmActive, rpm, preferences.rpmLimit)
+                    if (effective?.readings?.any { it.status == SensorStatus.STALE } == true) vehicleAlerts = vehicleAlerts + VehicleAlert(
+                        "stale-sensors", "Stale vehicle sensor readings", AlertSeverity.WARNING, AlertCategory.DATA_QUALITY)
+                    graph.recording.update { it.copy(vehicle = effective, shiftActive = rpmActive) }
                     val currentList = if (preferences.alertsEnabled) buildList {
                         addAll(vehicleAlerts)
-                        if (mode.usesGps && age != null && age > 3) add(VehicleAlert(
-                            "gps-lost", "GPS signal lost", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
+                        if (mode.usesVehicle && effective == null && now - beganNanos > VEHICLE_FRESHNESS_NANOS) add(VehicleAlert(
+                            "vehicle-acquiring", "Vehicle data not available yet", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
+                        if (mode.usesGps && (graph.recording.value.gpsError != null || age != null && age > 3 || age == null && now - beganNanos > 10_000_000_000L)) add(VehicleAlert(
+                            "gps-lost", if (age == null) "GPS fix not available yet" else "GPS signal lost", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
+                        if (mode.usesGps && graph.recording.value.gps?.horizontalAccuracyMeters?.let { it > 25 } == true) add(VehicleAlert(
+                            "gps-accuracy", "GPS accuracy too poor for timing", AlertSeverity.WARNING, AlertCategory.DATA_QUALITY))
                         if (rpmActive) add(VehicleAlert(
                             "shift", "RPM above configured limit", AlertSeverity.CRITICAL, AlertCategory.SHIFT, SensorId.ENGINE_RPM))
                     } else emptyList()
@@ -185,6 +201,11 @@ class RecordingService : Service() {
                     }
                     (activeAlerts.keys - currentAlerts.keys).forEach { key ->
                         save("alert-cleared", now, System.currentTimeMillis(), Json.encodeToString(activeAlerts.getValue(key).message))
+                    }
+                    currentAlerts.forEach { (key, alert) ->
+                        if (activeAlerts[key]?.condition != null && activeAlerts[key]?.condition != alert.condition)
+                            save(if (alert.condition == AlertCondition.UNCONFIRMED) "alert-unconfirmed" else "alert-confirmed",
+                                now, System.currentTimeMillis(), Json.encodeToString(alert.message))
                     }
                     if ((currentAlerts.keys - activeAlerts.keys).isNotEmpty()) tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
                     activeAlerts = currentAlerts
@@ -214,9 +235,15 @@ class RecordingService : Service() {
                 (if (mode.usesVehicle) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0)
         startForeground(17, notification, type)
     }
-    override fun onTimeout(startId: Int, fgsType: Int) { recording?.cancel() }
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        timedOut = true
+        recording?.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
     override fun onDestroy() {
         val job = recording
+        if (!ending && !explicitStop) interrupted = true
         job?.cancel()
         if (job == null) scope.cancel() else job.invokeOnCompletion { scope.cancel() }
         super.onDestroy()
