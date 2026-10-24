@@ -1,5 +1,6 @@
 package dev.trackdash.simulation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -10,104 +11,80 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.trackdash.core.*
 import dev.trackdash.core.simulation.SimulationScenario
 import dev.trackdash.core.telemetry.*
+import dev.trackdash.recording.AlertBanners
+import dev.trackdash.recording.DashboardAlertLayer
+import dev.trackdash.recording.RaceRpmGauge
+import dev.trackdash.recording.RallyGaugeGrid
+import dev.trackdash.recording.RallyHeader
+import dev.trackdash.recording.RallyReading
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimulationScreen(state: SimulationUiState, onStart: () -> Unit, onStop: () -> Unit,
-    onScenario: (SimulationScenario) -> Unit, onLimits: (DemoWarningLimits) -> Unit) {
+    onScenario: (SimulationScenario) -> Unit, onLimits: (DemoWarningLimits) -> Unit, onBack: () -> Unit) {
     var scenariosOpen by remember { mutableStateOf(false) }
     var limitsOpen by remember { mutableStateOf(false) }
     val running = state.telemetry.status == AcquisitionStatus.RUNNING
     val sample = state.telemetry.sample
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > maxHeight
+    BackHandler(onBack = onBack)
+    DashboardAlertLayer(state.alerts, state.shiftActive) {
+      Column(Modifier.fillMaxSize()) {
+        RallyHeader("SIMULATION · ${if (running) "RUNNING" else "STOPPED"}", onBack) {
+            TextButton(onClick = { scenariosOpen = true }, enabled = running) { Text("Scenarios") }
+            TextButton(onClick = { limitsOpen = true }) { Text("Warning limits") }
+            OutlinedButton(onClick = if (running) onStop else onStart) {
+                Text(if (running) "Stop simulation" else "Start simulation")
+            }
+        }
+      BoxWithConstraints(Modifier.weight(1f)) {
+        val wide = maxWidth > maxHeight && maxWidth >= 600.dp
         val columns = if (wide) 4 else 2
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (wide) 12.dp else 16.dp),
-            verticalArrangement = Arrangement.spacedBy(if (wide) 8.dp else 12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text("VEHICLE DEMO", style = if (wide) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
-                    Text("SIMULATION · ${if (running) "RUNNING" else "STOPPED"}",
-                        color = MaterialTheme.colorScheme.primary, style = if (wide) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge)
-                }
-                if (wide) {
-                    TextButton(onClick = { scenariosOpen = true }, enabled = running) { Text("Scenarios") }
-                    TextButton(onClick = { limitsOpen = true }) { Text("Warning limits") }
-                }
-                Button(onClick = if (running) onStop else onStart) {
-                    Text(if (running) "Stop simulation" else "Start simulation")
-                }
-            }
-            if (!wide) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { scenariosOpen = true }, enabled = running) { Text("Scenarios") }
-                TextButton(onClick = { limitsOpen = true }) { Text("Warning limits") }
-            }
-            if (!wide) Text(if (running) "Scenario: ${state.scenario.label()}" else "Stopped · no live readings", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val bodyModifier = if (wide) Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)
+            else Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)
+        Column(bodyModifier,
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
             state.telemetry.error?.let { Text("Source error: $it", color = MaterialTheme.colorScheme.error) }
-            state.alerts.forEach { alert ->
-                val color = if (alert.severity == AlertSeverity.CRITICAL) MaterialTheme.colorScheme.error else Color(0xFFFFC66D)
-                Surface(color = color.copy(alpha = 0.15f), shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
-                    Text("${alert.severity} · ${alert.message}", color = color, modifier = Modifier.padding(12.dp))
-                }
-            }
-            Surface(shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(if (wide) 10.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(sample.readingText(SensorId.ENGINE_RPM), fontSize = 48.sp, fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.testTag("rpm-value"))
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("RPM", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("GEAR ${sample?.gear ?: "—"}", style = MaterialTheme.typography.titleLarge)
-                        }
-                    }
-                    val rpm = sample?.readings?.firstOrNull { it.sensorId == SensorId.ENGINE_RPM && it.status == SensorStatus.AVAILABLE }?.value
-                    LinearProgressIndicator(progress = { ((rpm ?: 0.0) / 7000.0).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                }
-            }
+            AlertBanners(state.alerts)
+            val rpm = sample?.readings?.firstOrNull { it.sensorId == SensorId.ENGINE_RPM && it.status == SensorStatus.AVAILABLE }?.value
+            RaceRpmGauge(rpm, 7000.0, state.shiftActive, Modifier.fillMaxWidth(), compact = wide)
             val tiles = listOf(
                 Triple("OIL TEMP", sample.readingText(SensorId.OIL_TEMPERATURE), "°C"),
                 Triple("COOLANT", sample.readingText(SensorId.COOLANT_TEMPERATURE), "°C"),
                 Triple("INTAKE", sample.readingText(SensorId.INTAKE_TEMPERATURE), "°C"),
-                Triple("OIL PRESSURE", sample?.oilPressure?.name ?: "UNAVAILABLE", "switch · simulated"),
+                Triple("OIL PRESSURE", sample?.oilPressure?.name ?: "UNAVAILABLE", ""),
                 Triple("SPEED", sample.readingText(SensorId.SPEED), "km/h"),
                 Triple("THROTTLE", sample.readingText(SensorId.THROTTLE), "%"),
                 Triple("ENGINE LOAD", sample.readingText(SensorId.ENGINE_LOAD), "%"),
                 Triple("VOLTAGE", sample.readingText(SensorId.VOLTAGE, 1), "V"),
             )
-            tiles.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { (label, value, unit) ->
-                        Surface(shape = MaterialTheme.shapes.medium, modifier = Modifier.weight(1f)) {
-                            Column(Modifier.padding(if (wide) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(value, style = if (value.length > 8) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = if (value == "LOW") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.testTag("tile-$label"))
-                                Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
+            val readings = tiles.map { (label, value, unit) ->
+                val safety = state.alerts.any { alert -> alert.category == AlertCategory.ENGINE_SAFETY && when (label) {
+                    "OIL PRESSURE" -> alert.id == "oil-pressure"
+                    "OIL TEMP" -> alert.sensor == SensorId.OIL_TEMPERATURE
+                    "COOLANT" -> alert.sensor == SensorId.COOLANT_TEMPERATURE
+                    "INTAKE" -> alert.sensor == SensorId.INTAKE_TEMPERATURE
+                    else -> false
+                } }
+                RallyReading(label, value, unit, critical = safety)
             }
-            if (wide) Text(if (running) "Scenario: ${state.scenario.label()}" else "Stopped · no live readings", style = MaterialTheme.typography.bodySmall)
-            Text("Synthetic demonstration data · ${state.telemetry.receivedSamples} samples received · not recorded",
+            RallyGaugeGrid(readings, columns, modifier = if (wide) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth(),
+                fitHeight = wide, maximumSp = 64)
+            if (wide) Text("${state.scenario.label()} · SYNTHETIC DATA · NOT RECORDED",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            if (!wide) Text("Synthetic demonstration data · ${state.telemetry.receivedSamples} samples · not recorded",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Demo thresholds are editable examples, not BMW or engine-safe limits. GPS simulation is not available yet.",
+            if (!wide) Text("Demo thresholds are editable examples, not manufacturer or engine-safe limits. GPS simulation is not available yet.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+      }
+     }
     }
     if (scenariosOpen) AlertDialog(onDismissRequest = { scenariosOpen = false }, title = { Text("Simulation scenarios") },
         text = {

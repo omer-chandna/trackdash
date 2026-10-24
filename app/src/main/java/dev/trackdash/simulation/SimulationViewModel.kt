@@ -26,6 +26,7 @@ data class SimulationUiState(
     val scenario: SimulationScenario = SimulationScenario.NORMAL,
     val limits: DemoWarningLimits = DemoWarningLimits(),
     val alerts: List<VehicleAlert> = emptyList(),
+    val shiftActive: Boolean = false,
 )
 
 class SimulationViewModel(private val source: SimulatedVehicleSource) : ViewModel() {
@@ -33,12 +34,21 @@ class SimulationViewModel(private val source: SimulatedVehicleSource) : ViewMode
     private val mutableState = MutableStateFlow(SimulationUiState())
     val state = mutableState.asStateFlow()
     private var alerts = VehicleAlertEngine(mutableState.value.limits.rules())
+    private var shiftActive = false
 
     init {
         viewModelScope.launch {
             repository.state.collect { telemetry ->
                 val warnings = telemetry.sample?.let(alerts::evaluate) ?: emptyList<VehicleAlert>().also { alerts.reset() }
-                mutableState.value = mutableState.value.copy(telemetry = telemetry, alerts = warnings)
+                val rpm = telemetry.sample?.readings?.firstOrNull {
+                    it.sensorId == SensorId.ENGINE_RPM && it.status == dev.trackdash.core.SensorStatus.AVAILABLE
+                }?.value
+                shiftActive = when {
+                    rpm == null || rpm < 6800.0 -> false
+                    rpm >= 7000.0 -> true
+                    else -> shiftActive
+                }
+                mutableState.value = mutableState.value.copy(telemetry = telemetry, alerts = warnings, shiftActive = shiftActive)
             }
         }
     }
@@ -48,6 +58,7 @@ class SimulationViewModel(private val source: SimulatedVehicleSource) : ViewMode
         source.selectScenario(SimulationScenario.NORMAL)
         mutableState.value = mutableState.value.copy(scenario = SimulationScenario.NORMAL)
         alerts.reset()
+        shiftActive = false
         repository.start()
     }
 
@@ -55,8 +66,9 @@ class SimulationViewModel(private val source: SimulatedVehicleSource) : ViewMode
         repository.stop()
         source.selectScenario(SimulationScenario.NORMAL)
         alerts.reset()
+        shiftActive = false
         mutableState.value = mutableState.value.copy(
-            telemetry = repository.state.value, scenario = SimulationScenario.NORMAL, alerts = emptyList(),
+            telemetry = repository.state.value, scenario = SimulationScenario.NORMAL, alerts = emptyList(), shiftActive = false,
         )
     }
 

@@ -41,7 +41,7 @@ class RecordingTest {
         assertTrue(samples.any { it.kind == "vehicle" })
         assertEquals(stopped.samples, dao.sampleCount(id).first())
         assertTrue(dao.events(id, "lap").first().isNotEmpty())
-        assertTrue(dao.events(id, "alert").first().any { it.payload.contains("Low oil-pressure") })
+        assertTrue(dao.events(id, "alert").first().any { it.payload.contains("Low oil pressure") })
         val csv = StringWriter()
         SessionExport.write(dao, id, csv)
         assertTrue(csv.toString().contains("SIMULATION"))

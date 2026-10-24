@@ -8,7 +8,7 @@ import org.junit.Test
 class TracksTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun savedTrackLoadsItsGatesAndCanBeReusedAfterEditing() {
-        compose.onNodeWithText("Tracks").performClick()
+        compose.onNodeWithContentDescription("Tracks").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Demo circuit").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Edit").onFirst().performClick()
         compose.onNodeWithText("Track name").assertTextContains("Demo circuit")

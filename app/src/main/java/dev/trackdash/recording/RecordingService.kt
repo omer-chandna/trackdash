@@ -27,10 +27,18 @@ data class RecordingState(val sessionId: String? = null, val active: Boolean = f
     val simulated: Boolean = true, val vehicle: VehicleSample? = null, val gps: GpsFix? = null,
     val currentLapNanos: Long = 0, val lastLap: TimedLap? = null, val bestLap: TimedLap? = null,
     val laps: Int = 0, val samples: Long = 0, val gpsAgeSeconds: Double? = null,
-    val message: String = "Ready", val error: String? = null, val alerts: List<String> = emptyList(),
+    val message: String = "Ready", val error: String? = null, val alerts: List<VehicleAlert> = emptyList(),
     val obd: ObdDiagnostics = ObdDiagnostics(), val rejectedFixes: Int = 0,
     val gpsRateHz: Double = 0.0, val theoreticalBestNanos: Long? = null,
-    val dashboard: DashboardPreferences = DashboardPreferences(), val transport: String = "None")
+    val dashboard: DashboardPreferences = DashboardPreferences(), val transport: String = "None",
+    val shiftActive: Boolean = false)
+
+internal fun nextShiftState(current: Boolean, rpm: Double?, limit: Double?): Boolean = when {
+    rpm == null || limit == null -> false
+    rpm >= limit -> true
+    rpm < limit - 200.0 -> false
+    else -> current
+}
 
 /** Acquisition lives in a foreground service. A bounded channel backpressures producers. */
 class RecordingService : Service() {
@@ -85,10 +93,9 @@ class RecordingService : Service() {
             preferences.intakeLimit?.let { add(TemperatureRule(SensorId.INTAKE_TEMPERATURE, it)) }
         })
         val tone = if (preferences.audible) ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) else null
-        var activeAlerts = emptySet<String>()
+        var activeAlerts = emptyMap<String, VehicleAlert>()
         var rpmActive = false
-        var rpmSince: Long? = null
-        var vehicleAlerts = emptyList<String>()
+        var vehicleAlerts = emptyList<VehicleAlert>()
         var previousGpsNanos: Long? = null
         val queue = Channel<SampleRow>(256)
         // Writer outlives producer cancellation long enough to drain every accepted sample.
@@ -123,16 +130,13 @@ class RecordingService : Service() {
                 } }
                 try { source.samples().collect { sample ->
                     graph.recording.update { it.copy(vehicle = sample) }
-                    vehicleAlerts = alertEngine.evaluate(sample).map { it.message }
+                    vehicleAlerts = alertEngine.evaluate(sample)
                     val rpm = sample.readings.find { it.sensorId == SensorId.ENGINE_RPM && it.status == SensorStatus.AVAILABLE }?.value
                     val limit = preferences.rpmLimit
-                    if (rpm == null || limit == null || rpm < limit - 200) { rpmActive = false; rpmSince = null }
-                    else if (rpm >= limit) {
-                        if (rpmSince == null) rpmSince = sample.elapsedRealtimeNanos
-                        if (sample.elapsedRealtimeNanos - rpmSince!! >= 300_000_000) rpmActive = true
-                    } else if (!rpmActive) rpmSince = null
-                    if (rpmActive) vehicleAlerts = vehicleAlerts + "RPM above configured limit"
-                    if (sample.readings.any { it.status == SensorStatus.STALE }) vehicleAlerts = vehicleAlerts + "Stale vehicle sensor readings"
+                    rpmActive = nextShiftState(rpmActive, rpm, limit)
+                    if (sample.readings.any { it.status == SensorStatus.STALE }) vehicleAlerts = vehicleAlerts + VehicleAlert(
+                        "stale-sensors", "Stale vehicle sensor readings", AlertSeverity.WARNING, AlertCategory.DATA_QUALITY)
+                    graph.recording.update { it.copy(shiftActive = rpmActive) }
                     save("vehicle", sample.elapsedRealtimeNanos, System.currentTimeMillis(), Json.encodeToString(sample))
                 } } catch (error: Exception) {
                     if (error is CancellationException) throw error
@@ -168,12 +172,23 @@ class RecordingService : Service() {
                     val now = SystemClock.elapsedRealtimeNanos()
                     val age = graph.recording.value.gps?.let { (now - it.elapsedRealtimeNanos) / 1e9 }
                     if (age != null && age > 3) timer?.markGap()
-                    val currentAlerts = if (preferences.alertsEnabled) (vehicleAlerts + if (mode.usesGps && age != null && age > 3) listOf("GPS signal lost") else emptyList()).toSet() else emptySet()
-                    (currentAlerts - activeAlerts).forEach { alert -> save("alert", now, System.currentTimeMillis(), Json.encodeToString(alert)) }
-                    (activeAlerts - currentAlerts).forEach { alert -> save("alert-cleared", now, System.currentTimeMillis(), Json.encodeToString(alert)) }
-                    if ((currentAlerts - activeAlerts).isNotEmpty()) tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
+                    val currentList = if (preferences.alertsEnabled) buildList {
+                        addAll(vehicleAlerts)
+                        if (mode.usesGps && age != null && age > 3) add(VehicleAlert(
+                            "gps-lost", "GPS signal lost", AlertSeverity.WARNING, AlertCategory.CONNECTIVITY))
+                        if (rpmActive) add(VehicleAlert(
+                            "shift", "RPM above configured limit", AlertSeverity.CRITICAL, AlertCategory.SHIFT, SensorId.ENGINE_RPM))
+                    } else emptyList()
+                    val currentAlerts = currentList.associateBy { it.id }
+                    (currentAlerts.keys - activeAlerts.keys).forEach { key ->
+                        save("alert", now, System.currentTimeMillis(), Json.encodeToString(currentAlerts.getValue(key).message))
+                    }
+                    (activeAlerts.keys - currentAlerts.keys).forEach { key ->
+                        save("alert-cleared", now, System.currentTimeMillis(), Json.encodeToString(activeAlerts.getValue(key).message))
+                    }
+                    if ((currentAlerts.keys - activeAlerts.keys).isNotEmpty()) tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
                     activeAlerts = currentAlerts
-                    graph.recording.update { it.copy(alerts = currentAlerts.toList()) }
+                    graph.recording.update { it.copy(alerts = currentList.filterNot { alert -> alert.category == AlertCategory.SHIFT }) }
                     graph.recording.update { it.copy(gpsAgeSeconds = age, currentLapNanos = timer?.startedAtNanos?.let { start -> now - start } ?: 0) }
                     delay(200)
                 }

@@ -4,6 +4,7 @@ import android.content.pm.ActivityInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -21,7 +22,7 @@ class SimulationDashboardTest {
     }
     private fun rpm() = compose.onNodeWithTag("rpm-value").fetchSemanticsNode().config[SemanticsProperties.Text].single().text
     private fun scenario(name: String) {
-        compose.onNodeWithText("Scenarios").performScrollTo().performClick()
+        compose.onNodeWithText("Scenarios").performClick()
         compose.onNodeWithText(name).performClick()
     }
     private fun waitForText(text: String) {
@@ -37,15 +38,21 @@ class SimulationDashboardTest {
         compose.onNodeWithText("SIMULATION · STOPPED").assertIsDisplayed()
         compose.onNodeWithText("Start simulation").performClick()
         compose.waitUntil(5000) { rpm() != "—" }
+        compose.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        compose.waitForIdle()
+        compose.onNodeWithTag("tile-OIL TEMP").assertIsDisplayed().assertHeightIsAtLeast(40.dp)
+        compose.onNodeWithTag("tile-VOLTAGE").assertIsDisplayed()
+        compose.onNodeWithTag("rpm-value").assertIsDisplayed().assertHeightIsAtLeast(56.dp)
     }
 
     @Test fun pressureAndDisconnectFaultsClearHealthyValuesAndRecover() {
         start()
         scenario("Low oil pressure")
-        waitForText("CRITICAL · Low oil-pressure switch")
+        waitForText("LOW OIL PRESSURE")
         compose.onNodeWithTag("tile-OIL PRESSURE").assertTextEquals("LOW")
+        compose.onNodeWithText("GEAR", substring = true).assertDoesNotExist()
         scenario("OBD disconnect")
-        waitForText("WARNING · Vehicle data unavailable")
+        waitForText("VEHICLE DATA UNAVAILABLE")
         compose.onNodeWithTag("rpm-value").assertTextEquals("—")
         compose.onNodeWithTag("tile-OIL PRESSURE").assertTextEquals("UNAVAILABLE")
         scenario("Normal driving")
@@ -56,24 +63,24 @@ class SimulationDashboardTest {
     @Test fun overheatingAndEditableThresholdsAreFunctional() {
         start()
         scenario("Overheating")
-        waitForText("WARNING · Coolant temperature above configured limit")
-        compose.onNodeWithText("Warning limits").performScrollTo().performClick()
+        waitForText("COOLANT TEMPERATURE ABOVE CONFIGURED LIMIT")
+        compose.onNodeWithText("Warning limits").performClick()
         compose.onNodeWithText("Coolant limit °C").performTextReplacement("bad")
         compose.onNodeWithText("Apply limits").assertIsNotEnabled()
         compose.onNodeWithText("Coolant limit °C").performTextReplacement("150")
         compose.onNodeWithText("Oil limit °C").performTextReplacement("160")
         compose.onNodeWithText("Apply limits").performClick()
-        compose.onNodeWithText("WARNING · Coolant temperature above configured limit").assertDoesNotExist()
+        compose.onNodeWithText("COOLANT TEMPERATURE ABOVE CONFIGURED LIMIT").assertDoesNotExist()
     }
 
     @Test fun rotationRetainsScenarioAndBackgroundingStopsDemo() {
         start()
         scenario("Low oil pressure")
-        waitForText("CRITICAL · Low oil-pressure switch")
+        waitForText("LOW OIL PRESSURE")
         compose.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         compose.waitForIdle()
         compose.activityRule.scenario.recreate()
-        waitForText("CRITICAL · Low oil-pressure switch")
+        waitForText("LOW OIL PRESSURE")
         compose.onNodeWithText("SIMULATION · RUNNING").assertIsDisplayed()
         compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)

@@ -6,18 +6,52 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import dev.trackdash.core.*
+import dev.trackdash.core.telemetry.AlertCategory
+import dev.trackdash.core.telemetry.VehicleAlert
 import dev.trackdash.data.DashboardPreferences
 
 @Composable
-fun LiveGauges(sample: VehicleSample, preferences: DashboardPreferences, active: Boolean) {
+fun LiveGauges(sample: VehicleSample, preferences: DashboardPreferences, alerts: List<VehicleAlert>, shiftActive: Boolean,
+    modifier: Modifier = Modifier, compact: Boolean = false) {
     val readings = preferences.gauges.mapNotNull { sensor -> sample.readings.find { it.sensorId == sensor } }
         .filter { !preferences.hideUnsupported || it.status != SensorStatus.UNSUPPORTED }
-    GaugeGrid(readings, preferences)
+    val rpm = readings.firstOrNull { it.sensorId == SensorId.ENGINE_RPM }
+    val metrics = readings.filterNot { it.sensorId == SensorId.ENGINE_RPM }.map { reading ->
+        val (value, unit) = displayValue(reading, preferences)
+        val safety = alerts.any { it.category == AlertCategory.ENGINE_SAFETY && it.sensor == reading.sensorId }
+        val maximum = when (reading.sensorId.unit) {
+            SensorUnit.CELSIUS -> 160.0
+            SensorUnit.METERS_PER_SECOND -> 80.0
+            SensorUnit.VOLTS -> 16.0
+            else -> 100.0
+        }
+        RallyReading(reading.sensorId.name.replace('_', ' '), value, unit, critical = safety,
+            progress = if (preferences.bars && reading.status == SensorStatus.AVAILABLE)
+                (requireNotNull(reading.value) / maximum).toFloat().coerceIn(0f, 1f) else null)
+    } + if (sample.oilPressure != OilPressureStatus.UNAVAILABLE) listOf(
+        RallyReading("OIL PRESSURE", sample.oilPressure.name,
+            critical = alerts.any { it.id == "oil-pressure" && it.category == AlertCategory.ENGINE_SAFETY })
+    ) else emptyList()
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
+        if (SensorId.ENGINE_RPM in preferences.gauges) {
+            RaceRpmGauge(
+                rpm = rpm?.value?.takeIf { rpm.status == SensorStatus.AVAILABLE },
+                limit = preferences.rpmLimit,
+                shiftActive = shiftActive,
+                modifier = Modifier.fillMaxWidth(),
+                compact = compact,
+            )
+        }
+        BoxWithConstraints(if (compact) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth()) {
+            val columns = if (maxWidth >= 600.dp) 4 else 2
+            RallyGaugeGrid(metrics, columns, Modifier.fillMaxSize(), fitHeight = compact,
+                maximumSp = if (preferences.largeGauges) 64 else 48)
+        }
+    }
 }
 
 @Composable
@@ -34,38 +68,15 @@ fun RecordingDisplayPolicy(preferences: DashboardPreferences, active: Boolean) {
     }
 }
 
-@Composable
-private fun GaugeGrid(readings: List<SensorReading>, preferences: DashboardPreferences) {
-    BoxWithConstraints {
-        val columns = if (maxWidth > 480.dp) 4 else 2
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            readings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { reading ->
-                    val (value, unit) = displayValue(reading, preferences)
-                    val shift = reading.sensorId == SensorId.ENGINE_RPM && reading.status == SensorStatus.AVAILABLE && preferences.rpmLimit?.let { reading.value!! >= it } == true
-                    Surface(Modifier.weight(1f), shape = MaterialTheme.shapes.medium, color = if (shift) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(reading.sensorId.name.replace('_', ' '), style = MaterialTheme.typography.labelMedium)
-                            Text(value, style = if (preferences.largeGauges) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
-                            Text(unit, style = MaterialTheme.typography.labelMedium)
-                            if (preferences.bars && reading.status == SensorStatus.AVAILABLE) {
-                                val maximum = when (reading.sensorId.unit) { SensorUnit.RPM -> preferences.rpmLimit ?: 8000.0; SensorUnit.CELSIUS -> 160.0; SensorUnit.METERS_PER_SECOND -> 80.0; SensorUnit.VOLTS -> 16.0; else -> 100.0 }
-                                LinearProgressIndicator(progress = { (reading.value!! / maximum).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                            }
-                        }
-                    }
-                }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-            } }
-        }
-    }
-}
-
 private fun displayValue(reading: SensorReading, prefs: DashboardPreferences): Pair<String, String> {
     val unit = when (reading.sensorId.unit) {
         SensorUnit.CELSIUS -> if (prefs.fahrenheit) "°F" else "°C"
         SensorUnit.METERS_PER_SECOND -> if (prefs.mph) "mph" else "km/h"
-        else -> reading.sensorId.unit.name
+        SensorUnit.PERCENT -> "%"
+        SensorUnit.VOLTS -> "V"
+        SensorUnit.DEGREES -> "°"
+        SensorUnit.GRAMS_PER_SECOND -> "g/s"
+        SensorUnit.RPM -> "RPM"
     }
     if (reading.status != SensorStatus.AVAILABLE) return reading.status.name to unit
     val value = requireNotNull(reading.value)

@@ -13,6 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,10 +30,12 @@ import dev.trackdash.core.simulation.SimulationScenario
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.*
 import dev.trackdash.sources.discoverCxAdapters
+import dev.trackdash.ui.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name) {
+fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBack: () -> Unit) {
     val context = LocalContext.current
     val graph = context.applicationContext as TrackDashApplication
     val state by graph.recording.collectAsStateWithLifecycle()
@@ -61,35 +65,56 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name) {
     }
     if (state.active) {
         RecordingDashboard(state, controls, { graph.simulationControls.value = it },
-            { context.startService(Intent(context, RecordingService::class.java).setAction("STOP")) })
+            { context.startService(Intent(context, RecordingService::class.java).setAction("STOP")) }, onBack)
         return
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Session recorder", style = MaterialTheme.typography.headlineLarge)
-        Text(if (state.active) if (state.simulated) "SIMULATED DATA · RECORDING" else "DEVICE SOURCES · RECORDING" else "Prepare while stationary", color = MaterialTheme.colorScheme.primary)
-        if (!state.active) {
-            Row { Switch(simulated, { simulated = it }); Text("Simulation", Modifier.padding(12.dp)) }
-            OperatingMode.entries.forEach { item ->
-                Row(Modifier.fillMaxWidth().selectable(mode == item, role = Role.RadioButton, onClick = { modeName = item.name })) {
-                    RadioButton(mode == item, null); Text(item.name.replace('_', ' '), Modifier.padding(12.dp))
+    val modePanel: @Composable () -> Unit = {
+        TrackDashPanel {
+            SectionTitle("Session mode", "Choose the data sources for this run.")
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Switch(simulated, { simulated = it })
+                Column(Modifier.padding(start = 10.dp)) {
+                    Text("Simulation", style = MaterialTheme.typography.titleMedium)
+                    Text(if (simulated) "Uses safe synthetic data" else "Uses connected device sources",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            OperatingMode.entries.forEach { item ->
+                Surface(
+                    color = if (mode == item) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().selectable(mode == item, role = Role.RadioButton, onClick = { modeName = item.name }),
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        RadioButton(mode == item, null)
+                        Text(item.name.replace('_', ' '), Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+        }
+    }
+    val sourcePanel: @Composable () -> Unit = {
+        TrackDashPanel(emphasized = true) {
+            SectionTitle("Sources", if (simulated) "The built-in circuit and vehicle stream are ready." else "Select the hardware and track required for this mode.")
             if (!simulated && mode.usesGps) {
-                Text("Track")
+                Text("Track", style = MaterialTheme.typography.labelLarge)
+                if (tracks.isEmpty()) Text("Create a track before recording GPS laps.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 tracks.forEach { track -> FilterChip(trackId == track.id, { trackId = track.id }, { Text(track.name) }) }
             }
             if (mode.usesVehicle) {
-                Text("Vehicle profile (optional)")
+                Text("Vehicle profile (optional)", style = MaterialTheme.typography.labelLarge)
+                if (vehicles.isEmpty()) Text("No saved vehicles. Default dashboard settings will be used.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 vehicles.forEach { vehicle -> FilterChip(vehicleId == vehicle.id, { vehicleId = vehicle.id }, { Text(vehicle.name) }) }
             }
             if (!simulated && mode.usesVehicle) {
-                Button(onClick = {
+                OutlinedButton(onClick = {
                     if (Build.VERSION.SDK_INT >= 31 && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
                         permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
                     else runCatching { bleCx = false; address = ""; devices = context.getSystemService(BluetoothManager::class.java).adapter?.bondedDevices?.map { (it.name ?: "Adapter") to it.address } ?: emptyList() }
                         .onFailure { error = it.message }
-                }) { Text("Load paired Classic adapters") }
-                Text("For Veepeak OBDCheck BLE: pair VEEPEAK in Android Bluetooth settings using PIN 1234, then select it here. This adapter uses Classic Bluetooth on Android.")
+                }, modifier = Modifier.fillMaxWidth()) { Text("Load paired Classic adapters") }
+                Text("Pair a supported Classic Bluetooth adapter in Android settings, then select it here.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(enabled = !scanning, onClick = {
                     val needed = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
                         else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -101,7 +126,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name) {
                         } } } catch (errorValue: Exception) { if (errorValue is CancellationException) throw errorValue; error = errorValue.message }
                         finally { scanning = false }
                     }
-                }) { Text(if (scanning) "Scanning CX adapters…" else "Scan OBDLink CX (experimental BLE)") }
+                }) { Text(if (scanning) "Scanning BLE adapters…" else "Scan OBDLink CX (experimental BLE)") }
                 devices.forEach { (name, value) -> FilterChip(address == value, { address = value }, { Text("$name · $value") }) }
             }
             Button(enabled = simulated || (!mode.usesGps || trackId.isNotBlank()) && (!mode.usesVehicle || address.isNotBlank()), onClick = {
@@ -111,11 +136,33 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name) {
                 }.filter { context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
                 if (required.isNotEmpty()) permissions.launch(required.toTypedArray()) else start()
             }, modifier = Modifier.fillMaxWidth()) { Text("Start recording") }
-            Text("After granting permissions, press Start again. Simulation uses the built-in demo circuit.")
+            Text("After granting permissions, press Start again. Simulation uses the built-in demo circuit.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text("${state.message} · ${state.samples} stored samples")
-        (error ?: state.error)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (state.sessionId != null) Text("Last session: ${state.laps} laps. Open Sessions to review saved data.")
+    }
+    Column(Modifier.fillMaxSize()) {
+      TopAppBar(
+          title = { Text("Session recorder") },
+          navigationIcon = { IconButton(onClick = onBack) {
+              Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+          } },
+      )
+      BoxWithConstraints(Modifier.weight(1f)) {
+        val wide = maxWidth > maxHeight
+        TrackDashPage {
+            PageHeader("Prepare to record", "Configure sources while the vehicle is stationary.", eyebrow = "New session")
+            if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
+                Box(Modifier.weight(0.9f)) { modePanel() }
+                Box(Modifier.weight(1.1f)) { sourcePanel() }
+            } else {
+                modePanel()
+                sourcePanel()
+            }
+            Text("${state.message} · ${state.samples} stored samples", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            (error ?: state.error)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (state.sessionId != null) Text("Last session: ${state.laps} laps. Open Sessions to review saved data.")
+        }
+      }
     }
 }
 

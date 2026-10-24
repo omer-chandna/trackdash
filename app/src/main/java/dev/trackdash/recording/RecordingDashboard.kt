@@ -3,57 +3,106 @@ package dev.trackdash.recording
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.trackdash.core.simulation.SimulationScenario
 import dev.trackdash.data.SimulationControls
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingDashboard(state: RecordingState, controls: SimulationControls,
-    onControls: (SimulationControls) -> Unit, onStop: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > maxHeight
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (wide) 12.dp else 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text(if (state.simulated) "SIMULATED DATA · RECORDING" else "DEVICE DATA · RECORDING", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                    Text("${state.samples} samples saved", style = MaterialTheme.typography.labelSmall)
+    onControls: (SimulationControls) -> Unit, onStop: () -> Unit, onBack: () -> Unit) {
+    var controlsOpen by remember { mutableStateOf(false) }
+    DashboardAlertLayer(state.alerts, state.shiftActive) {
+        Column(Modifier.fillMaxSize()) {
+            RallyHeader(if (state.simulated) "SIMULATED · RECORDING" else "LIVE · RECORDING", onBack) {
+                if (state.simulated) IconButton(onClick = { controlsOpen = true }) {
+                    Icon(Icons.Outlined.Tune, contentDescription = "Simulation controls")
                 }
-                Button(onClick = onStop) { Text("Stop and save") }
+                OutlinedButton(onClick = onStop) { Text("Stop and save") }
             }
-            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            state.alerts.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("CURRENT LAP", style = MaterialTheme.typography.labelSmall)
-                    Text(formatTime(state.currentLapNanos), style = MaterialTheme.typography.headlineLarge)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text("Last  ${state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"}")
-                    Text("Best  ${state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"}")
-                    Text("${state.laps} laps · Theoretical ${state.theoreticalBestNanos?.let(::formatTime) ?: "—"}", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            if (state.gps != null) Text("GPS ±%.1f m · age %.1f s · %.1f Hz".format(state.gps.horizontalAccuracyMeters, state.gpsAgeSeconds ?: 0.0, state.gpsRateHz), style = MaterialTheme.typography.labelSmall)
-            state.lastLap?.takeUnless { it.valid }?.let { Text("Invalid lap: ${it.invalidReasons.joinToString()}", color = MaterialTheme.colorScheme.error) }
-            state.vehicle?.let { sample ->
-                LiveGauges(sample, state.dashboard, true)
-                Text("${if (sample.connected) "Connected" else "Disconnected"} · Oil-pressure switch: ${sample.oilPressure}", style = MaterialTheme.typography.labelSmall)
-            }
-            if (state.simulated) {
-                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide simulation controls" else "Simulation controls") }
-                if (expanded) {
-                    Text("Lap pace: ${controls.lapSeconds.toInt()} seconds")
-                    Slider(controls.lapSeconds.toFloat(), { onControls(controls.copy(lapSeconds = it.toDouble())) }, valueRange = 20f..120f)
-                    Row { Switch(controls.gpsDropout, { onControls(controls.copy(gpsDropout = it)) }); Text("GPS dropout", Modifier.padding(12.dp)) }
-                    TextButton(onClick = { onControls(controls.copy(gpsJump = controls.gpsJump + 1)) }) { Text("Inject GPS jump") }
-                    SimulationScenario.entries.forEach { scenario -> FilterChip(controls.vehicleScenario == scenario, { onControls(controls.copy(vehicleScenario = scenario)) }, { Text(scenario.name.replace('_', ' ')) }) }
-                }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val wide = maxWidth > maxHeight && maxHeight >= 280.dp
+                if (wide) LandscapeDashboard(state)
+                else PortraitDashboard(state, onOpenControls = { controlsOpen = true })
             }
         }
     }
+    if (controlsOpen) SimulationControlsDialog(controls, onControls) { controlsOpen = false }
+}
+
+@Composable
+private fun LandscapeDashboard(state: RecordingState) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        AlertBanners(state.alerts)
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (state.gps != null || state.vehicle == null) Column(Modifier.weight(0.40f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos), tag = "current-lap-value"),
+                    Modifier.fillMaxWidth().weight(1.3f), maximumSp = 80)
+                RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"),
+                    Modifier.fillMaxWidth().weight(1f), maximumSp = 64)
+                RallyMetric(RallyReading("BEST LAP", state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"),
+                    Modifier.fillMaxWidth().weight(1f), maximumSp = 64)
+            }
+            if (state.vehicle != null) {
+                LiveGauges(state.vehicle, state.dashboard, state.alerts, state.shiftActive,
+                    modifier = Modifier.weight(0.60f).fillMaxHeight(), compact = true)
+            } else {
+                val speed = state.gps?.speedMetersPerSecond?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)
+                RallyGaugeGrid(listOf(
+                    RallyReading("SPEED", speed?.let { "%.0f".format(it) } ?: "—", if (state.dashboard.mph) "mph" else "km/h"),
+                    RallyReading("LAPS", state.laps.toString()),
+                    RallyReading("THEORETICAL BEST", state.theoreticalBestNanos?.let(::formatTime) ?: "—"),
+                ), columns = 1, modifier = Modifier.weight(0.60f).fillMaxHeight(), fitHeight = true, maximumSp = 80)
+            }
+        }
+        state.error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        state.lastLap?.takeUnless { it.valid }?.let { Text("Invalid lap: ${it.invalidReasons.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        Text("${state.laps} LAPS · ${state.samples} SAMPLES${state.gps?.let { " · GPS ±%.1f m".format(it.horizontalAccuracyMeters) } ?: ""}",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
+}
+
+@Composable
+private fun PortraitDashboard(state: RecordingState, onOpenControls: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AlertBanners(state.alerts)
+        RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos)), Modifier.fillMaxWidth().height(144.dp), maximumSp = 80)
+        RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
+        RallyMetric(RallyReading("BEST LAP", state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
+        state.vehicle?.let { LiveGauges(it, state.dashboard, state.alerts, state.shiftActive) }
+        if (state.simulated) OutlinedButton(onClick = onOpenControls) { Text("Simulation controls") }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+@Composable
+private fun SimulationControlsDialog(controls: SimulationControls, onControls: (SimulationControls) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Simulation controls") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Lap pace: ${controls.lapSeconds.toInt()} seconds")
+                Slider(controls.lapSeconds.toFloat(), { onControls(controls.copy(lapSeconds = it.toDouble())) }, valueRange = 20f..120f)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(controls.gpsDropout, { onControls(controls.copy(gpsDropout = it)) })
+                    Text("GPS dropout", Modifier.padding(start = 10.dp))
+                }
+                OutlinedButton(onClick = { onControls(controls.copy(gpsJump = controls.gpsJump + 1)) }) { Text("Inject GPS jump") }
+                Text("Vehicle scenario", style = MaterialTheme.typography.titleMedium)
+                SimulationScenario.entries.forEach { scenario ->
+                    FilterChip(controls.vehicleScenario == scenario,
+                        { onControls(controls.copy(vehicleScenario = scenario)) },
+                        { Text(scenario.name.replace('_', ' ')) })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }
