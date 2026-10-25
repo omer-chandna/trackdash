@@ -1,7 +1,7 @@
 # Non-recording live performance view
 
 Branch: `codex/live-performance-view`, based on merged main `07b71a7` (PRs #2/#3).
-Status: IN_REVIEW; no merge, push or production release is performed by this change.
+Status: IN_REVIEW; published for review, with no merge or production release.
 
 ## Behavior
 
@@ -40,8 +40,8 @@ production key or production-release qualification is implied.
 The live-view UI test was rerun directly with synthetic data to retain screenshots.
 Home's three actions fit on the representative landscape phone; the immersive
 dashboard shows large gauges, NOT RECORDING, no lap/save controls and sharing off.
-See `docs/testing.md` for regression details. Remote CI was not run for this
-unpublished branch. Real Bluetooth/vehicle and current-Android permission/service
+See `docs/testing.md` for regression details. Remote CI is tracked independently
+on the pull request. Real Bluetooth/vehicle and current-Android permission/service
 qualification remain required; simulation/API 29 tests are not a hardware guarantee.
 
 ![Home with separate live and recording actions](../screenshots/home-live-view-landscape.png)

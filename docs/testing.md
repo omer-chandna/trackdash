@@ -54,7 +54,8 @@ The final live-view candidate passed 102 JVM tests (77 core + 25 app), all 31
 API 29 Android tests, zero lint issues, debug assembly, the 97-coordinate
 attribution inventory and APK signature verification. The live-view UI case was
 also rerun directly for inspected synthetic landscape screenshots. This is local
-verification on an unpublished review branch; remote CI/hardware are separate.
+verification on the review branch; remote PR checks and hardware qualification
+are separate.
 
 ## Monitoring/open-source verification (2026-10-24)
 
