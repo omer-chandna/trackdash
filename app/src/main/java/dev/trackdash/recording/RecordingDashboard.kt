@@ -24,11 +24,12 @@ fun RecordingDashboard(state: RecordingState, controls: SimulationControls,
     var controlsOpen by remember { mutableStateOf(false) }
     DashboardAlertLayer(state.alerts, state.shiftActive) {
         Column(Modifier.fillMaxSize()) {
-            RallyHeader(if (state.simulated) "SIMULATED · RECORDING" else "LIVE · RECORDING", onBack) {
+            RallyHeader(if (state.liveView) (if (state.simulated) "SIMULATED · " else "") + "LIVE VIEW · NOT RECORDING"
+                else if (state.simulated) "SIMULATED · RECORDING" else "LIVE · RECORDING", onBack) {
                 if (state.simulated) IconButton(onClick = { controlsOpen = true }) {
                     Icon(Icons.Outlined.Tune, contentDescription = "Simulation controls")
                 }
-                OutlinedButton(onClick = onStop) { Text("Stop and save") }
+                OutlinedButton(onClick = onStop) { Text(if (state.liveView) "Stop live view" else "Stop and save") }
             }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val wide = maxWidth > maxHeight && maxHeight >= 280.dp
@@ -37,7 +38,7 @@ fun RecordingDashboard(state: RecordingState, controls: SimulationControls,
             }
         }
     }
-    if (controlsOpen) SimulationControlsDialog(controls, onControls) { controlsOpen = false }
+    if (controlsOpen) SimulationControlsDialog(controls, onControls, vehicleOnly = state.liveView) { controlsOpen = false }
 }
 
 @Composable
@@ -45,7 +46,7 @@ private fun LandscapeDashboard(state: RecordingState) {
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         AlertBanners(state.alerts)
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (state.gps != null || state.vehicle == null) Column(Modifier.weight(0.40f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!state.liveView && (state.gps != null || state.vehicle == null)) Column(Modifier.weight(0.40f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos), tag = "current-lap-value"),
                     Modifier.fillMaxWidth().weight(1.3f), maximumSp = 80)
                 RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"),
@@ -55,7 +56,9 @@ private fun LandscapeDashboard(state: RecordingState) {
             }
             if (state.vehicle != null) {
                 LiveGauges(state.vehicle, state.dashboard, state.alerts, state.shiftActive,
-                    modifier = Modifier.weight(0.60f).fillMaxHeight(), compact = true)
+                    modifier = Modifier.weight(if (state.liveView) 1f else 0.60f).fillMaxHeight(), compact = true)
+            } else if (state.liveView) {
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { Text("Connecting to vehicle…") }
             } else {
                 val speed = gpsSpeedForDisplay(state)?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)
                 RallyGaugeGrid(listOf(
@@ -68,7 +71,8 @@ private fun LandscapeDashboard(state: RecordingState) {
         state.error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
         MonitoringStatus(state)
         state.lastLap?.takeUnless { it.valid }?.let { Text("Invalid lap: ${it.invalidReasons.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-        Text("${state.laps} LAPS · ${state.samples} SAMPLES${state.gps?.let { " · GPS ±%.1f m".format(it.horizontalAccuracyMeters) } ?: ""}",
+        Text(if (state.liveView) "VIEW ONLY · NO TELEMETRY SAVED · SHARING OFF"
+            else "${state.laps} LAPS · ${state.samples} SAMPLES${state.gps?.let { " · GPS ±%.1f m".format(it.horizontalAccuracyMeters) } ?: ""}",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
@@ -80,9 +84,11 @@ private fun PortraitDashboard(state: RecordingState, onOpenControls: () -> Unit)
         MonitoringStatus(state)
         if (state.usesGps) RallyMetric(RallyReading("GPS SPEED", gpsSpeedForDisplay(state)?.times(if (state.dashboard.mph) 2.2369362921 else 3.6)?.let { "%.0f".format(it) } ?: "—",
             if (state.dashboard.mph) "mph" else "km/h"), Modifier.fillMaxWidth().height(112.dp))
-        RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos)), Modifier.fillMaxWidth().height(144.dp), maximumSp = 80)
-        RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
-        RallyMetric(RallyReading("BEST LAP", state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
+        if (!state.liveView) {
+            RallyMetric(RallyReading("CURRENT LAP", formatTime(state.currentLapNanos)), Modifier.fillMaxWidth().height(144.dp), maximumSp = 80)
+            RallyMetric(RallyReading("LAST LAP", state.lastLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
+            RallyMetric(RallyReading("BEST LAP", state.bestLap?.let { formatTime(it.durationNanos) } ?: "—"), Modifier.fillMaxWidth().height(112.dp))
+        } else Text("VIEW ONLY · NO TELEMETRY SAVED · SHARING OFF", style = MaterialTheme.typography.labelMedium)
         state.vehicle?.let { LiveGauges(it, state.dashboard, state.alerts, state.shiftActive) }
         if (state.simulated) OutlinedButton(onClick = onOpenControls) { Text("Simulation controls") }
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -108,12 +114,14 @@ private fun MonitoringStatus(state: RecordingState) {
 }
 
 @Composable
-private fun SimulationControlsDialog(controls: SimulationControls, onControls: (SimulationControls) -> Unit, onDismiss: () -> Unit) {
+private fun SimulationControlsDialog(controls: SimulationControls, onControls: (SimulationControls) -> Unit,
+    vehicleOnly: Boolean = false, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Simulation controls") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              if (!vehicleOnly) {
                 Text("Lap pace: ${controls.lapSeconds.toInt()} seconds")
                 Slider(controls.lapSeconds.toFloat(), { onControls(controls.copy(lapSeconds = it.toDouble())) }, valueRange = 20f..120f)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -121,6 +129,7 @@ private fun SimulationControlsDialog(controls: SimulationControls, onControls: (
                     Text("GPS dropout", Modifier.padding(start = 10.dp))
                 }
                 OutlinedButton(onClick = { onControls(controls.copy(gpsJump = controls.gpsJump + 1)) }) { Text("Inject GPS jump") }
+              }
                 Text("Vehicle scenario", style = MaterialTheme.typography.titleMedium)
                 SimulationScenario.entries.forEach { scenario ->
                     FilterChip(controls.vehicleScenario == scenario,

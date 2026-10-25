@@ -16,7 +16,7 @@ class SimulationDashboardTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     private fun start() {
-        compose.onNodeWithText("Try vehicle simulation").performClick()
+        compose.onNodeWithContentDescription("Try vehicle simulation").performScrollTo().performClick()
         compose.onNodeWithText("SIMULATION · RUNNING").assertIsDisplayed()
         compose.waitUntil(5000) { rpm() != "—" }
     }

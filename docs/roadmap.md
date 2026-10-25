@@ -1,8 +1,8 @@
 # Roadmap
 
-Authoritative status as of 2026-10-24. COMPLETED below describes software already
-integrated on main, including rally refresh PR #1. The monitoring/open-source
-milestone remains IN_REVIEW until its PRs are approved and integrated. Physical verification is listed
+Authoritative status as of 2026-10-25. COMPLETED below describes software already
+integrated on main, including PRs #1, #2 and #3. Non-recording live view remains
+IN_REVIEW on `codex/live-performance-view`. Physical verification is listed
 separately. This is a development build, not a claim that hardware/release gates passed.
 
 | Feature | Status | Integration | Acceptance evidence / remaining limits |
@@ -43,16 +43,17 @@ Merged through PR #1. Review notes and screenshots:
 
 Functional review: [PR #2](https://github.com/omer-chandna/trackdash/pull/2),
 `codex/monitoring-reliability`. Open-source packaging is reviewed separately on
-`codex/open-source-foundation`; merge the functional PR before completing this
-milestone. Nothing below claims physical hardware or production-release qualification.
+`codex/open-source-foundation`. Both PRs are merged on main. Nothing below claims
+physical hardware or production-release qualification.
 
 | Feature | Status | Acceptance evidence / remaining limits |
 |---|---|---|
-| Monitoring reliability | IN_REVIEW | Independent source recovery, stale-value watchdog, unresolved warnings, validated limits, storage-failure and Back regressions |
-| Standard OBD-II setup | IN_REVIEW | Per-ECU advertised/actual/unknown states, readiness, guarded VIN identity and explicit compatibility export; real hardware pending |
-| Saved-session replay | IN_REVIEW | Read-only bounded playback, preserved timestamps, malformed/gapped samples, Back cancellation; no recording/network |
-| Optional HTTPS sharing | IN_REVIEW | Default off, privacy allowlist, encrypted authorization, bounded non-blocking queue and health counters; real receiver qualification pending |
-| Open-source foundation | IN_REVIEW | Apache-2.0, 97-coordinate attribution inventory, offline license viewer, privacy/security/contribution guidance and compatibility/release gates |
+| Monitoring reliability | COMPLETED | Independent source recovery, stale-value watchdog, unresolved warnings, validated limits, storage-failure and Back regressions |
+| Standard OBD-II setup | COMPLETED | Per-ECU advertised/actual/unknown states, readiness, guarded VIN identity and explicit compatibility export; real hardware pending |
+| Saved-session replay | COMPLETED | Read-only bounded playback, preserved timestamps, malformed/gapped samples, Back cancellation; no recording/network |
+| Optional HTTPS sharing | COMPLETED | Default off, privacy allowlist, encrypted authorization, bounded non-blocking queue and health counters; real receiver qualification pending |
+| Open-source foundation | COMPLETED | Apache-2.0, 97-coordinate attribution inventory, offline license viewer, privacy/security/contribution guidance and compatibility/release gates |
+| Non-recording live view | IN_REVIEW | Vehicle-only foreground dashboard; no session/writer/GPS/sharing; warnings, recovery, explicit stop and Back; `codex/live-performance-view` |
 
 ## Remaining acceptance work
 

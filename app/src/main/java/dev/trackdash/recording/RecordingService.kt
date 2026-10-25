@@ -36,7 +36,16 @@ data class RecordingState(val sessionId: String? = null, val active: Boolean = f
     val dashboard: DashboardPreferences = DashboardPreferences(), val transport: String = "None",
     val shiftActive: Boolean = false, val usesGps: Boolean = true, val usesVehicle: Boolean = false,
     val gpsError: String? = null, val vehicleError: String? = null,
-    val sharingEnabled: Boolean = false, val sharingStats: SharingStats = SharingStats(), val sharingMessage: String? = null)
+    val sharingEnabled: Boolean = false, val sharingStats: SharingStats = SharingStats(), val sharingMessage: String? = null,
+    val liveView: Boolean = false)
+
+internal fun monitoringEndMessage(liveView: Boolean, timedOut: Boolean, interrupted: Boolean, failure: String?): String = when {
+    timedOut -> "Interrupted by Android service time limit"
+    interrupted -> if (liveView) "Live view interrupted · nothing saved" else "Recording interrupted"
+    failure != null -> if (liveView) "Live view failed · nothing saved" else "Recording failed"
+    liveView -> "Live view stopped · nothing saved"
+    else -> "Saved"
+}
 
 internal fun nextShiftState(current: Boolean, rpm: Double?, limit: Double?): Boolean = when {
     rpm == null || limit == null -> false
@@ -45,8 +54,9 @@ internal fun nextShiftState(current: Boolean, rpm: Double?, limit: Double?): Boo
     else -> current
 }
 
-/** Acquisition lives in a foreground service. A bounded channel backpressures producers. */
+/** Shared foreground acquisition. Live view has no session, writer, GPS, or sharing worker. */
 class RecordingService : Service() {
+    companion object { const val LIVE_VIEW_EXTRA = "liveView" }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val graph get() = application as TrackDashApplication
     private var recording: Job? = null
@@ -59,10 +69,17 @@ class RecordingService : Service() {
         if (intent?.action == "STOP") { explicitStop = true; if (recording == null) stopSelf() else recording?.cancel(); return START_NOT_STICKY }
         if (recording != null || ending) return START_NOT_STICKY
         val simulated = intent?.getBooleanExtra("simulated", true) ?: true
-        val mode = runCatching { OperatingMode.valueOf(intent?.getStringExtra("mode") ?: "GPS_LAP_TIMER") }.getOrDefault(OperatingMode.GPS_LAP_TIMER)
-        try { foreground(simulated, mode) } catch (error: Exception) {
-            graph.recording.value = RecordingState(error = error.message); stopSelf(); return START_NOT_STICKY
+        val liveView = intent?.getBooleanExtra(LIVE_VIEW_EXTRA, false) == true
+        // Enforce the no-GPS/no-track live-view boundary at the service, not just in the UI.
+        val mode = if (liveView) OperatingMode.VEHICLE_DASHBOARD else runCatching {
+            OperatingMode.valueOf(intent?.getStringExtra("mode") ?: "GPS_LAP_TIMER")
+        }.getOrDefault(OperatingMode.GPS_LAP_TIMER)
+        try { foreground(simulated, mode, liveView) } catch (error: Exception) {
+            graph.recording.value = RecordingState(error = error.message, liveView = liveView)
+            stopSelf(); return START_NOT_STICKY
         }
+        if (liveView) graph.recording.value = RecordingState(active = true, simulated = simulated,
+            message = "Connecting · not recording", usesGps = false, usesVehicle = true, liveView = true)
         recording = scope.launch {
             var id: String? = null
             var failure: String? = null
@@ -72,11 +89,14 @@ class RecordingService : Service() {
                     if (simulated) DemoCircuit.track else graph.database.dao().track(requireNotNull(intent?.getStringExtra("track")))?.let { TrackJson.decode(it.json) }
                         ?: error("Choose a saved track")
                 } else null
-                id = UUID.randomUUID().toString()
-                graph.database.dao().insertSession(SessionRow(id, System.currentTimeMillis(), mode = mode.name,
-                    simulated = simulated, trackId = track?.id, vehicleId = intent?.getStringExtra("vehicle")))
-                graph.recording.value = RecordingState(id, active = true, simulated = simulated, message = "Recording",
-                    usesGps = mode.usesGps, usesVehicle = mode.usesVehicle)
+                if (!liveView) {
+                    id = UUID.randomUUID().toString()
+                    graph.database.dao().insertSession(SessionRow(id, System.currentTimeMillis(), mode = mode.name,
+                        simulated = simulated, trackId = track?.id, vehicleId = intent?.getStringExtra("vehicle")))
+                }
+                graph.recording.value = RecordingState(id, active = true, simulated = simulated,
+                    message = if (liveView) "Live view · not recording" else "Recording",
+                    usesGps = mode.usesGps, usesVehicle = mode.usesVehicle, liveView = liveView)
                 capture(id, mode, simulated, track, intent?.getStringExtra("address"), intent?.getStringExtra("vehicle") ?: "", intent?.getBooleanExtra("bleCx", false) ?: false)
             } catch (_: CancellationException) { /* Explicit stop / service destruction. */ }
             catch (error: Exception) { failure = error.message ?: error.javaClass.simpleName }
@@ -86,8 +106,12 @@ class RecordingService : Service() {
                     if (id != null) runCatching { graph.database.dao().endSession(id, System.currentTimeMillis(),
                         if (timedOut || interrupted) "INTERRUPTED" else if (failure == null) "COMPLETE" else "ERROR") }
                         .onFailure { failure = "Could not finalize session: ${it.message}" }
-                    graph.recording.update { it.copy(active = false, shiftActive = false,
-                        message = if (timedOut) "Interrupted by Android service time limit" else if (interrupted) "Recording interrupted" else if (failure == null) "Saved" else "Recording failed", error = failure ?: it.error) }
+                    graph.recording.update { state ->
+                        val stopped = state.copy(active = false, shiftActive = false,
+                            message = monitoringEndMessage(liveView, timedOut, interrupted, failure), error = failure ?: state.error)
+                        if (liveView) stopped.copy(vehicle = null, gps = null, alerts = emptyList(), obd = ObdDiagnostics(), transport = "None")
+                        else stopped
+                    }
                     stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
                 }
             }
@@ -95,7 +119,7 @@ class RecordingService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun capture(id: String, mode: OperatingMode, simulated: Boolean, track: Track?, address: String?, vehicleId: String, bleCx: Boolean): Unit = coroutineScope {
+    private suspend fun capture(id: String?, mode: OperatingMode, simulated: Boolean, track: Track?, address: String?, vehicleId: String, bleCx: Boolean): Unit = coroutineScope {
         val preferences = Preferences(this@RecordingService).dashboard(vehicleId).first()
         graph.recording.update { it.copy(dashboard = preferences, transport = if (simulated) "Simulation" else if (!mode.usesVehicle) "None" else if (bleCx) "OBDLink CX BLE (experimental)" else "Classic RFCOMM") }
         val alertEngine = VehicleAlertEngine(buildList {
@@ -111,27 +135,31 @@ class RecordingService : Service() {
         var previousGpsNanos: Long? = null
         val beganNanos = SystemClock.elapsedRealtimeNanos()
         var latestVehicle: VehicleSample? = null
-        val queue = Channel<SampleRow>(256)
+        val queue = if (id != null) Channel<SampleRow>(256) else null
         // Writer outlives producer cancellation long enough to drain every accepted sample.
-        val writer = scope.async(Dispatchers.IO) {
+        val writer = queue?.let { sink -> scope.async(Dispatchers.IO) {
             try {
-                for (first in queue) {
+                for (first in sink) {
                     val batch = mutableListOf(first)
-                    while (batch.size < 64) batch += queue.tryReceive().getOrNull() ?: break
+                    while (batch.size < 64) batch += sink.tryReceive().getOrNull() ?: break
                     val writeBatch = graph.recordingBatchWriter
                     if (writeBatch == null) graph.database.dao().insertSamples(batch) else writeBatch(batch)
                     graph.recording.update { it.copy(samples = it.samples + batch.size) }
                 }
-            } catch (error: Exception) { queue.close(error); throw error }
+            } catch (error: Exception) { sink.close(error); throw error }
+        } }
+        // Lazy payloads avoid even serializing telemetry/events in a non-recording live view.
+        suspend fun save(kind: String, nanos: Long, wall: Long, payload: () -> String) {
+            val sink = queue ?: return
+            sink.send(SampleRow(sessionId = requireNotNull(id), elapsedNanos = nanos, wallMillis = wall, kind = kind, payload = payload()))
         }
-        suspend fun save(kind: String, nanos: Long, wall: Long, payload: String) = queue.send(SampleRow(sessionId = id, elapsedNanos = nanos, wallMillis = wall, kind = kind, payload = payload))
         val timer = track?.let { LapTimer(it) }
         var sharing: TelemetrySharingSession? = null
         try {
             // Observe storage failures immediately, even if neither source produces another sample.
-            launch { writer.await() }
+            writer?.let { launch { it.await() } }
             try {
-                sharing = if (mode.usesVehicle) TelemetrySharingSession.create(this@RecordingService, this) else null
+                sharing = if (id != null && mode.usesVehicle) TelemetrySharingSession.create(this@RecordingService, this) else null
                 graph.recording.update { it.copy(sharingEnabled = sharing != null) }
                 sharing?.let { session -> launch { session.stats.collect { stats ->
                     graph.recording.update { it.copy(sharingStats = stats) }
@@ -140,8 +168,8 @@ class RecordingService : Service() {
             catch (_: Exception) {
                 graph.recording.update { it.copy(sharingMessage = "Sharing unavailable; local recording is unaffected") }
             }
-            if (track != null) save("track-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), TrackJson.encode(track))
-            save("settings-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString(preferences))
+            if (track != null) save("track-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis()) { TrackJson.encode(track) }
+            save("settings-snapshot", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis()) { Json.encodeToString(preferences) }
             if (mode.usesVehicle) launch {
                 val source = graph.recordingSources.vehicle(this@RecordingService, simulated, address, bleCx)
                 if (source is SimulatedVehicleSource) launch { graph.simulationControls.collect { source.selectScenario(it.vehicleScenario) } }
@@ -150,11 +178,11 @@ class RecordingService : Service() {
                     if (diagnostics.supported.isNotEmpty() && vehicleId.isNotBlank()) {
                         graph.database.dao().vehicle(vehicleId)?.let { row ->
                             check(!vehicleIdentityMismatch(row.vin, diagnostics.vin)) {
-                                "Different vehicle detected. Stop and choose the correct profile before recording."
+                                "Different vehicle detected. Stop and choose the correct profile."
                             }
                             val discovery = diagnostics.discovery
                             val changed = discovery != null && ObdCapabilityCache.decode(row.capabilities)?.discovery != discovery.copy(vin = null)
-                            if (changed || diagnostics.vin != null && row.vin != diagnostics.vin)
+                            if (id != null && (changed || diagnostics.vin != null && row.vin != diagnostics.vin))
                                 graph.database.dao().saveVehicle(row.copy(
                                     capabilities = if (changed) ObdCapabilityCache.encode(requireNotNull(discovery)) else row.capabilities,
                                     vin = diagnostics.vin ?: row.vin))
@@ -163,11 +191,11 @@ class RecordingService : Service() {
                 } }
                 source.samples().recoverAcquisition(onFailure = {
                     graph.recording.update { state -> state.copy(vehicleError = "Vehicle source unavailable; retrying") }
-                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString("Vehicle source unavailable; retrying"))
+                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis()) { Json.encodeToString("Vehicle source unavailable; retrying") }
                 }).collect { sample ->
                     latestVehicle = sample
                     graph.recording.update { it.copy(vehicleError = if (sample.connected) null else "Vehicle data unavailable; reconnecting") }
-                    save("vehicle", sample.elapsedRealtimeNanos, System.currentTimeMillis(), Json.encodeToString(sample))
+                    save("vehicle", sample.elapsedRealtimeNanos, System.currentTimeMillis()) { Json.encodeToString(sample) }
                     sharing?.tryOffer(sample)
                 }
             }
@@ -183,12 +211,12 @@ class RecordingService : Service() {
                 source.fixes().recoverAcquisition(onFailure = {
                     timer?.markGap("GPS source unavailable")
                     graph.recording.update { state -> state.copy(gpsError = "GPS unavailable; retrying", gpsRateHz = 0.0) }
-                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis(), Json.encodeToString("GPS source unavailable; retrying"))
+                    save("error", SystemClock.elapsedRealtimeNanos(), System.currentTimeMillis()) { Json.encodeToString("GPS source unavailable; retrying") }
                 }).collect { fix ->
-                    save("gps", fix.elapsedRealtimeNanos, fix.wallClockMillis, Json.encodeToString(fix))
+                    save("gps", fix.elapsedRealtimeNanos, fix.wallClockMillis) { Json.encodeToString(fix) }
                     val age = (SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos) / 1e9
                     if (age in 0.0..3.0) timer!!.accept(fix).forEach { lap ->
-                        save("lap", lap.endNanos, fix.wallClockMillis, Json.encodeToString(lap))
+                        save("lap", lap.endNanos, fix.wallClockMillis) { Json.encodeToString(lap) }
                     } else timer!!.markGap("Stale GPS fix")
                     val rate = previousGpsNanos?.let { old -> if (fix.elapsedRealtimeNanos > old) 1e9 / (fix.elapsedRealtimeNanos - old) else 0.0 } ?: 0.0
                     previousGpsNanos = fix.elapsedRealtimeNanos
@@ -222,15 +250,15 @@ class RecordingService : Service() {
                     } else emptyList()
                     val currentAlerts = currentList.associateBy { it.id }
                     (currentAlerts.keys - activeAlerts.keys).forEach { key ->
-                        save("alert", now, System.currentTimeMillis(), Json.encodeToString(currentAlerts.getValue(key).message))
+                        save("alert", now, System.currentTimeMillis()) { Json.encodeToString(currentAlerts.getValue(key).message) }
                     }
                     (activeAlerts.keys - currentAlerts.keys).forEach { key ->
-                        save("alert-cleared", now, System.currentTimeMillis(), Json.encodeToString(activeAlerts.getValue(key).message))
+                        save("alert-cleared", now, System.currentTimeMillis()) { Json.encodeToString(activeAlerts.getValue(key).message) }
                     }
                     currentAlerts.forEach { (key, alert) ->
                         if (activeAlerts[key]?.condition != null && activeAlerts[key]?.condition != alert.condition)
                             save(if (alert.condition == AlertCondition.UNCONFIRMED) "alert-unconfirmed" else "alert-confirmed",
-                                now, System.currentTimeMillis(), Json.encodeToString(alert.message))
+                                now, System.currentTimeMillis()) { Json.encodeToString(alert.message) }
                     }
                     if ((currentAlerts.keys - activeAlerts.keys).isNotEmpty() && tone != null)
                         audioAvailable = runCatching { tone.startTone(ToneGenerator.TONE_PROP_BEEP, 300) }.getOrDefault(false)
@@ -243,20 +271,21 @@ class RecordingService : Service() {
             awaitCancellation()
         } finally {
             sharing?.close()
-            queue.close()
-            try { withContext(NonCancellable) { writer.await() } } finally { runCatching { tone?.release() } }
+            queue?.close()
+            try { withContext(NonCancellable) { writer?.await() } } finally { runCatching { tone?.release() } }
         }
     }
 
-    private fun foreground(simulated: Boolean, mode: OperatingMode) {
+    private fun foreground(simulated: Boolean, mode: OperatingMode, liveView: Boolean) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("recording", "Recording", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(this, 1, Intent(this, RecordingService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE)
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(this, "recording").setContentTitle("TrackDash recording")
-            .setContentText(if (simulated) "SIMULATED DATA" else mode.name.replace('_', ' '))
+        val notification = Notification.Builder(this, "recording").setContentTitle(if (liveView) "TrackDash live view" else "TrackDash recording")
+            .setContentText(if (liveView) (if (simulated) "SIMULATED · " else "") + "Not recording · nothing saved"
+                else if (simulated) "SIMULATED DATA" else mode.name.replace('_', ' '))
             .setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentIntent(open).setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "Stop and save", stop).build()).build()
+            .addAction(Notification.Action.Builder(null, if (liveView) "Stop live view" else "Stop and save", stop).build()).build()
         val type = if (simulated) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else
             (if (mode.usesGps) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0) or
                 (if (mode.usesVehicle) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0)

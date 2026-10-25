@@ -4,11 +4,23 @@ TrackDash is local-first. No project-operated cloud backend, account registratio
 advertising SDK, analytics service, or automatic crash uploader is configured.
 The Android Internet permission supports services you explicitly configure.
 
-The optional sharing and setup-discovery behavior below describes companion
-[PR #2](https://github.com/omer-chandna/trackdash/pull/2). It is not present in a
-foundation-only build. Merge the functional companion before the open-source
-foundation for the complete product; ordinary local storage/export behavior
-described here also applies without that companion.
+Monitoring reliability and open-source foundations are integrated through PRs
+#2 and #3. Non-recording live view is under review on `codex/live-performance-view`.
+
+## Non-recording live view
+
+Live view keeps the latest vehicle readings and warning state in memory. It does
+not create a session, save telemetry/events/snapshots, acquire GPS, or start the
+optional sharing sender—even if sharing is enabled for recordings. Back or Stop
+live view ends acquisition; normal backgrounding continues it with a foreground
+notification. Rotation preserves it; process death does not resume it.
+Android may retain navigation and warning-animation state for activity recreation;
+that is not a saved telemetry or warning-event history.
+
+Saved vehicle profiles, display/limit settings, and pre-existing sessions remain
+on the phone. Explicit configuration saves and compatibility-report exports are
+separate user actions, not automatic trip recording. The app still initializes
+its local database on startup; live view is not a promise of no filesystem access.
 
 ## Stored on the phone
 
@@ -16,7 +28,7 @@ The app-private Room database stores vehicle profiles (including detected VIN
 when available), tracks/gates, recordings, telemetry samples, timestamps, GPS
 coordinates/quality, laps, warning events, notes and snapshots of session settings.
 DataStore holds display/limit settings and configured map/search providers.
-With that companion integrated, sharing uses separate app-private preferences with an encrypted authorization
+Sharing uses separate app-private preferences with an encrypted authorization
 value. Setup choices are retained in activity state, not published. Android backup/device transfer is disabled in the app
 manifest and extraction rules. Device/OS access controls still apply; data is not
 a separately encrypted session vault.
@@ -42,7 +54,7 @@ terms and privacy policy you accept. A map style may load its own tile, glyph an
 sprite hosts. Offline map databases must be lawfully obtained and may contain
 provider-specific metadata. Timing and local recording work without online maps.
 
-## Optional live sharing (companion PR #2)
+## Optional sharing during recordings
 
 Sharing is **off by default**, applies to new live recordings, and needs an explicit
 HTTPS receiver URL. It does not upload historical sessions. The fixed sensor packet

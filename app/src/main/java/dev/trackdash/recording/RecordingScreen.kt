@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -35,16 +36,16 @@ import dev.trackdash.ui.*
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBack: () -> Unit) {
+fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBack: () -> Unit, liveView: Boolean = false) {
     val context = LocalContext.current
     val graph = context.applicationContext as TrackDashApplication
     val state by graph.recording.collectAsStateWithLifecycle()
     val controls by graph.simulationControls.collectAsStateWithLifecycle()
     val tracks by graph.database.dao().tracks().collectAsStateWithLifecycle(emptyList())
     val vehicles by graph.database.dao().vehicles().collectAsStateWithLifecycle(emptyList())
-    var simulated by rememberSaveable { mutableStateOf(true) }
+    var simulated by rememberSaveable { mutableStateOf(!liveView) }
     var modeName by rememberSaveable { mutableStateOf(initialMode) }
-    val mode = OperatingMode.valueOf(modeName)
+    val mode = if (liveView) OperatingMode.VEHICLE_DASHBOARD else OperatingMode.valueOf(modeName)
     var trackId by rememberSaveable { mutableStateOf("") }
     var vehicleId by rememberSaveable { mutableStateOf("") }
     val preferences by remember(vehicleId) { Preferences(context.applicationContext).dashboard(vehicleId) }.collectAsStateWithLifecycle(DashboardPreferences())
@@ -55,6 +56,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
     val scope = rememberCoroutineScope()
     var devices by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var startRequested by rememberSaveable { mutableStateOf(false) }
     // Results belong to this exact setup, never to the address/profile that was previously selected.
     val discoveryKey = listOf(address, bleCx, vehicleId, simulated, modeName)
     var discovery by remember(discoveryKey) { mutableStateOf<ObdDiscoveryResult?>(null) }
@@ -91,21 +93,31 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
     DisposableEffect(discoveryKey) { onDispose { discoveryJob?.cancel() } }
     LaunchedEffect(state.active) { if (state.active) discoveryJob?.cancel() }
     fun start() {
+        startRequested = true
         runCatching { context.startForegroundService(Intent(context, RecordingService::class.java)
+            .putExtra(RecordingService.LIVE_VIEW_EXTRA, liveView)
             .putExtra("simulated", simulated).putExtra("mode", mode.name).putExtra("track", trackId)
-            .putExtra("vehicle", vehicleId.ifBlank { null }).putExtra("address", address).putExtra("bleCx", bleCx)) }.onFailure { error = it.message }
+            .putExtra("vehicle", vehicleId.ifBlank { null }).putExtra("address", address).putExtra("bleCx", bleCx)) }
+            .onFailure { startRequested = false; error = it.message }
     }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         error = if (it.any { entry -> !entry.value && entry.key != Manifest.permission.POST_NOTIFICATIONS }) "Required permission denied. Choose simulation or grant permission in Android settings." else null
     }
+    val leave = {
+        if (state.active && state.liveView || liveView && startRequested && !state.active)
+            context.startService(Intent(context, RecordingService::class.java).setAction("STOP"))
+        onBack()
+    }
+    BackHandler(enabled = liveView || state.active && state.liveView, onBack = leave)
     if (state.active) {
         RecordingDashboard(state, controls, { graph.simulationControls.value = it },
-            { context.startService(Intent(context, RecordingService::class.java).setAction("STOP")) }, onBack)
+            { if (state.liveView) leave() else context.startService(Intent(context, RecordingService::class.java).setAction("STOP")) }, leave)
         return
     }
     val modePanel: @Composable () -> Unit = {
         TrackDashPanel {
-            SectionTitle("Session mode", "Choose the data sources for this run.")
+            SectionTitle(if (liveView) "Live view" else "Session mode",
+                if (liveView) "Performance gauges without recording or lap timing." else "Choose the data sources for this run.")
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Switch(simulated, { simulated = it }, modifier = Modifier.semantics { contentDescription = "Simulation source" })
                 Column(Modifier.padding(start = 10.dp)) {
@@ -114,7 +126,10 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            OperatingMode.entries.forEach { item ->
+            if (liveView) {
+                Text("No telemetry, laps, or warning events are saved. Sharing is off even if enabled for recordings.")
+                Text("Back or Stop live view ends monitoring. Rotation keeps it running.", style = MaterialTheme.typography.bodySmall)
+            } else OperatingMode.entries.forEach { item ->
                 Surface(
                     color = if (mode == item) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = MaterialTheme.shapes.medium,
@@ -130,7 +145,8 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
     }
     val sourcePanel: @Composable () -> Unit = {
         TrackDashPanel(emphasized = true) {
-            SectionTitle("Sources", if (simulated) "The built-in circuit and vehicle stream are ready." else "Select the hardware and track required for this mode.")
+            SectionTitle("Sources", if (liveView) "Select your vehicle and adapter while parked."
+                else if (simulated) "The built-in circuit and vehicle stream are ready." else "Select the hardware and track required for this mode.")
             if (!simulated && mode.usesGps) {
                 Text("Track", style = MaterialTheme.typography.labelLarge)
                 if (tracks.isEmpty()) Text("Create a track before recording GPS laps.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -183,7 +199,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                                 val result = discoverObdVehicle(context.applicationContext, address, bleCx)
                                 ensureActive()
                                 if (scanVehicleId.isNotBlank()) graph.database.dao().vehicle(scanVehicleId)?.let { row ->
-                                    if (!vehicleIdentityMismatch(row.vin, result.vin))
+                                    if (!liveView && !vehicleIdentityMismatch(row.vin, result.vin))
                                         graph.database.dao().saveVehicle(row.copy(capabilities = ObdCapabilityCache.encode(result), vin = result.vin ?: row.vin))
                                 }
                                 discovery = result
@@ -211,7 +227,7 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                     if (discoveryExpired) Text("This check expired. Check sensors again before recording.", color = MaterialTheme.colorScheme.error)
                     if (identityMismatch) Text("A different vehicle was detected. Choose or create the correct vehicle profile, or explicitly select Default profile and configure its limits. The saved vehicle identity has not been changed.", color = MaterialTheme.colorScheme.error)
                     if (result.vin == null) Text("Vehicle identity could not be verified. Confirm the selected profile and limits belong to this vehicle.", style = MaterialTheme.typography.bodySmall)
-                    Text("Recording checks the connection again; these results are not a guarantee that readings will remain available.",
+                    Text("Monitoring checks the connection again; these results are not a guarantee that readings will remain available.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = { compatibilityDialog = true }) { Text("Export compatibility report") }
                 }
@@ -226,14 +242,15 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                     if (!simulated && mode.usesVehicle && Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
                 }.filter { context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
                 if (required.isNotEmpty()) permissions.launch(required.toTypedArray()) else start()
-            }, modifier = Modifier.fillMaxWidth()) { Text("Start recording") }
-            Text("After granting permissions, press Start again. Simulation uses the built-in demo circuit.",
+            }, modifier = Modifier.fillMaxWidth()) { Text(if (liveView) "Start live view" else "Start recording") }
+            Text(if (liveView) "After granting permissions, press Start again. No session or telemetry history will be created."
+                else "After granting permissions, press Start again. Simulation uses the built-in demo circuit.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     Column(Modifier.fillMaxSize()) {
       TopAppBar(
-          title = { Text("Session recorder") },
+          title = { Text(if (liveView) "Live performance view" else "Session recorder") },
           navigationIcon = { IconButton(onClick = onBack) {
               Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
           } },
@@ -241,7 +258,8 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
       BoxWithConstraints(Modifier.weight(1f)) {
         val wide = maxWidth > maxHeight
         TrackDashPage {
-            PageHeader("Prepare to record", "Configure sources while the vehicle is stationary.", eyebrow = "New session")
+            PageHeader(if (liveView) "Prepare live view" else "Prepare to record",
+                "Configure sources while the vehicle is stationary.", eyebrow = if (liveView) "Not recording" else "New session")
             if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
                 Box(Modifier.weight(0.9f)) { modePanel() }
                 Box(Modifier.weight(1.1f)) { sourcePanel() }
@@ -249,9 +267,10 @@ fun RecordingScreen(initialMode: String = OperatingMode.GPS_LAP_TIMER.name, onBa
                 modePanel()
                 sourcePanel()
             }
-            Text("${state.message} · ${state.samples} stored samples", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (liveView) "View only · no telemetry saved · sharing off" else "${state.message} · ${state.samples} stored samples",
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             (error ?: state.error)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (state.sessionId != null) Text("Last session: ${state.laps} laps. Open Sessions to review saved data.")
+            if (!liveView && state.sessionId != null) Text("Last session: ${state.laps} laps. Open Sessions to review saved data.")
         }
       }
     }

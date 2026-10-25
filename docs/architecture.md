@@ -5,12 +5,9 @@ validated telemetry models, cold source contracts, geometry/lap timing, alerts,
 standard PID decoding, VIN/prompt framing and CSV field serialization. `app`
 owns Android sources, Room, DataStore, foreground recording, MapLibre and Compose.
 
-Integration scope: source recovery/watchdog behavior, setup discovery/readiness,
-and replay/sharing below describe companion
-[PR #2](https://github.com/omer-chandna/trackdash/pull/2), not a foundation-only
-build. The independent open-source foundation supplies licensing, offline
-attribution and contributor/release guidance. Merge the functional companion first
-to obtain the complete architecture described here.
+Source recovery, discovery, replay/sharing and licensing are integrated through
+PRs #2 and #3. Non-recording live view is under review on
+`codex/live-performance-view`.
 
 `TrackDashApplication` is the manual composition root: one Room database,
 application initialization/recovery job, recording StateFlow and simulation
@@ -43,6 +40,15 @@ unreported drop. A 200 ms watchdog ages cached values without requiring another
 sensor delivery, suppresses stale speed/SHIFT, and retains unresolved engine warnings.
 Process death leaves RECORDING rows; next application startup marks them
 INTERRUPTED. No claim is made that a killed process resumes acquisition.
+
+Live view reuses the same foreground acquisition/watchdog/alert pipeline, but the
+service forces vehicle-only mode and never creates a session ID. A null ID means
+no channel, writer, payload serialization, snapshots or sharing worker. Runtime
+VIN mismatches still reject a wrong profile; live view does not update its cached
+identity/capabilities. Setup remains an explicit read-only sensor check. UI and
+notification labels distinguish live view from recording. Back stops live view;
+recording Back continues to leave capture running. A single service owner prevents
+either mode replacing the other. Room/telemetry/CSV formats are unchanged.
 
 Room schema v1 stores tracks, profiles, sessions and typed JSON sample/event rows,
 with cascading session deletion and an index on session/time. Track/settings
