@@ -33,7 +33,7 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
             val vehicle: @Composable () -> Unit = {
                 TrackDashPanel {
                     SectionTitle("Vehicle data", "Adapter and protocol availability")
-                    StatusChip(if (!state.active) "Inactive · last session information" else state.obd.state,
+                    StatusChip(if (!state.active) (if (state.liveView) "Live view stopped" else "Inactive · last session information") else state.obd.state,
                         color = if (state.obd.errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     Text("Transport · ${state.transport}")
                     Text("ECU · ${state.obd.ecu.ifBlank { "—" }}")
@@ -65,9 +65,10 @@ fun ConnectionStatusScreen(onBack: () -> Unit) {
             }
             val recorder: @Composable () -> Unit = {
                 TrackDashPanel {
-                    SectionTitle("Recorder", "Local capture health")
+                    SectionTitle(if (state.liveView) "Live view" else "Recorder", "Local monitoring health")
                     StatusChip(state.message)
-                    MetricTile("Stored samples", state.samples.toString(), if (state.simulated) "simulation" else "device", Modifier.fillMaxWidth())
+                    if (state.liveView) Text("Not recording · no telemetry saved · sharing off")
+                    else MetricTile("Stored samples", state.samples.toString(), if (state.simulated) "simulation" else "device", Modifier.fillMaxWidth())
                     Text("Database · ${context.getDatabasePath("trackdash.db").length() / 1024} KiB", style = MaterialTheme.typography.bodyMedium)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     if (state.sharingEnabled) Text("Sharing · ${state.sharingStats.sent} sent · ${state.sharingStats.dropped} dropped · ${state.sharingStats.errors} errors",

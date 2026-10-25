@@ -53,6 +53,7 @@ fun PageHeader(
 fun TrackDashPanel(
     modifier: Modifier = Modifier,
     emphasized: Boolean = false,
+    compact: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -62,7 +63,8 @@ fun TrackDashPanel(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = if (emphasized) 2.dp else 0.dp,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        Column(Modifier.padding(if (compact) 12.dp else 18.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp), content = content)
     }
 }
 

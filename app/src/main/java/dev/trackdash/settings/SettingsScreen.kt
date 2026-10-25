@@ -60,8 +60,8 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit, onOpenSou
             }
             Toggle("Fahrenheit", draft.fahrenheit) { draft = draft.copy(fahrenheit = it) }
             Toggle("Miles per hour", draft.mph) { draft = draft.copy(mph = it) }
-            Toggle("Keep screen awake during recording", draft.keepAwake) { draft = draft.copy(keepAwake = it) }
-            Toggle("Fullscreen recording", draft.fullscreen) { draft = draft.copy(fullscreen = it) }
+            Toggle("Keep screen awake while monitoring", draft.keepAwake) { draft = draft.copy(keepAwake = it) }
+            Toggle("Fullscreen monitoring", draft.fullscreen) { draft = draft.copy(fullscreen = it) }
             Toggle("Hide unsupported sensors", draft.hideUnsupported) { draft = draft.copy(hideUnsupported = it) }
             Toggle("Large gauges", draft.largeGauges) { draft = draft.copy(largeGauges = it) }
             Toggle("Gauge bars", draft.bars) { draft = draft.copy(bars = it) }
@@ -86,7 +86,7 @@ fun SettingsScreen(onBack: () -> Unit, onConnectionStatus: () -> Unit, onOpenSou
             Limit("Intake °C", limits.intake, -40.0..200.0) { limits = limits.copy(intake = it) }
             Limit("Shift RPM / redline", limits.rpm, 1000.0..20_000.0) { limits = limits.copy(rpm = it) }
             if (!limits.valid) Text("Correct the highlighted limits before saving.", color = MaterialTheme.colorScheme.error)
-            Button(enabled = profileReady && limits.valid, onClick = { scope.launch { message = runCatching { preferences.saveDashboard(vehicleId, limits.applyTo(draft)); "Profile settings saved. Recording uses settings from session start." }.getOrElse { "Save failed: ${it.message}" } } }, modifier = Modifier.fillMaxWidth()) { Text("Save dashboard & warnings") }
+            Button(enabled = profileReady && limits.valid, onClick = { scope.launch { message = runCatching { preferences.saveDashboard(vehicleId, limits.applyTo(draft)); "Profile settings saved. Restart monitoring to apply changes." }.getOrElse { "Save failed: ${it.message}" } } }, modifier = Modifier.fillMaxWidth()) { Text("Save dashboard & warnings") }
         }
     }
     val systemPanel: @Composable () -> Unit = {

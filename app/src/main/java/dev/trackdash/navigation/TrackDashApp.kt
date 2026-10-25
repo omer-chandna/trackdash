@@ -14,7 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -78,7 +81,9 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                 )
                 NavHost(nav, startDestination = Destination.HOME.name, modifier = Modifier.weight(1f)) {
                     composable(Destination.HOME.name) {
-                        HomeScreen(onSettings = { nav.navigate("settings") }, onRecord = { mode -> nav.navigate("recording/${mode.name}") }, onOpenDemo = {
+                        HomeScreen(onSettings = { nav.navigate("settings") },
+                            onLiveView = { nav.navigate("live-view") { launchSingleTop = true } },
+                            onRecord = { mode -> nav.navigate("recording/${mode.name}") }, onOpenDemo = {
                             simulation.start()
                             nav.navigate("simulation") { launchSingleTop = true }
                         })
@@ -90,6 +95,11 @@ fun TrackDashApp(simulation: SimulationViewModel) {
                     }
                     composable("recording/{mode}") { entry -> RecordingScreen(
                         entry.arguments?.getString("mode") ?: OperatingMode.GPS_LAP_TIMER.name,
+                        onBack = { nav.popBackStack() },
+                    ) }
+                    composable("live-view") { RecordingScreen(
+                        initialMode = OperatingMode.VEHICLE_DASHBOARD.name,
+                        liveView = true,
                         onBack = { nav.popBackStack() },
                     ) }
                     composable("settings") { SettingsScreen(
@@ -185,9 +195,12 @@ private fun DestinationIcon(destination: Destination) {
 }
 
 @Composable
-private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit, onSettings: () -> Unit, model: HomeViewModel = viewModel()) {
+private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit, onSettings: () -> Unit,
+    onLiveView: () -> Unit, model: HomeViewModel = viewModel()) {
     val selectedName by model.mode.collectAsStateWithLifecycle()
     val selected = OperatingMode.valueOf(selectedName)
+    val graph = LocalContext.current.applicationContext as dev.trackdash.data.TrackDashApplication
+    val monitoring by graph.recording.collectAsStateWithLifecycle()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight
         TrackDashPage {
@@ -202,10 +215,10 @@ private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit
             if (wide) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     ModePanel(selected, model::selectMode, Modifier.weight(1.25f), compact = true)
-                    LaunchPanel(selected, onOpenDemo, onRecord, onSettings, Modifier.weight(0.75f), compact = true)
+                    LaunchPanel(selected, onOpenDemo, onRecord, onSettings, onLiveView, monitoring, Modifier.weight(0.75f), compact = true)
                 }
             } else {
-                LaunchPanel(selected, onOpenDemo, onRecord, onSettings)
+                LaunchPanel(selected, onOpenDemo, onRecord, onSettings, onLiveView, monitoring)
                 ModePanel(selected, model::selectMode)
             }
         }
@@ -215,7 +228,7 @@ private fun HomeScreen(onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit
 @Composable
 private fun ModePanel(selected: OperatingMode, onSelect: (OperatingMode) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     TrackDashPanel(modifier) {
-        SectionTitle("Choose an operating mode", if (compact) null else "Match the dashboard to the data available in the car.")
+        SectionTitle("Recording mode", if (compact) null else "Used when you choose Set up recording. Live view uses vehicle sensors only.")
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OperatingMode.entries.forEach { mode ->
                 Surface(
@@ -239,12 +252,24 @@ private fun ModePanel(selected: OperatingMode, onSelect: (OperatingMode) -> Unit
 
 @Composable
 private fun LaunchPanel(selected: OperatingMode, onOpenDemo: () -> Unit, onRecord: (OperatingMode) -> Unit,
-    onSettings: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
-    TrackDashPanel(modifier, emphasized = true) {
-        StatusChip("Ready")
-        SectionTitle(selected.title(), if (compact) null else selected.description())
-        Button(onClick = { onRecord(selected) }, modifier = Modifier.fillMaxWidth()) { Text("Set up recording") }
-        OutlinedButton(onClick = onOpenDemo, modifier = Modifier.fillMaxWidth()) { Text("Try vehicle simulation") }
+    onSettings: () -> Unit, onLiveView: () -> Unit, monitoring: dev.trackdash.recording.RecordingState,
+    modifier: Modifier = Modifier, compact: Boolean = false) {
+    TrackDashPanel(modifier, emphasized = true, compact = compact) {
+        val viewing = monitoring.active && monitoring.liveView
+        val recording = monitoring.active && !monitoring.liveView
+        StatusChip(if (viewing) "Live view active · not recording" else if (recording) "Recording active" else "Ready")
+        SectionTitle("Live or recorded", if (compact) null else "View gauges without saving, or record the selected mode.")
+        Button(enabled = !recording, onClick = onLiveView, modifier = Modifier.fillMaxWidth()) {
+            Text(if (viewing) "Resume live view" else "Live view")
+        }
+        OutlinedButton(enabled = !viewing, onClick = { onRecord(selected) }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (recording) "Resume recording" else "Set up recording")
+        }
+        if (viewing || recording) Text(if (viewing) "Stop live view before recording." else "Stop and save before starting live view.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = onOpenDemo, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Try vehicle simulation" }) {
+            Text(if (compact) "Try simulation" else "Try vehicle simulation")
+        }
         if (!compact) {
             TextButton(onClick = onSettings, modifier = Modifier.align(Alignment.End)) { Text("Vehicles & settings") }
             Text("Simulation lets you explore gauges and warning scenarios without a car or adapter.",

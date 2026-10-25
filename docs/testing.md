@@ -39,6 +39,24 @@ Android tests run on the API 29 x86_64 Pixel 2 emulator with WHPX. Coverage incl
 - Read-only session replay and restored detail selection, encrypted sharing credential
   storage, packaged runtime notices and offline license-viewer Back behavior.
 
+## Non-recording live-view coverage (under review)
+
+`LiveViewPolicyTest` adds two JVM cases for honest stopped/failed/interrupted
+messages and unchanged recording messages. `LiveViewTest` adds five Android
+cases: no session/sample writes with a throwing writer and sharing enabled;
+source failure/recovery without GPS; notification stop; gauges/warnings/SHIFT
+and rotation; system/visible Back; background continuity; explicit Stop; and
+protection of an existing recording. Database-wide session/sample counts are
+compared before, during and after live view. Existing recording persistence,
+storage failure and independent-GPS tests remain in the full suite.
+
+The final live-view candidate passed 102 JVM tests (77 core + 25 app), all 31
+API 29 Android tests, zero lint issues, debug assembly, the 97-coordinate
+attribution inventory and APK signature verification. The live-view UI case was
+also rerun directly for inspected synthetic landscape screenshots. This is local
+verification on the review branch; remote PR checks and hardware qualification
+are separate.
+
 ## Monitoring/open-source verification (2026-10-24)
 
 The combined candidate passed 77 core and 23 app JVM tests, all 26 API 29 Android

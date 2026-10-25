@@ -5,13 +5,10 @@ No account or cloud service is required. Android 10+ (API 29),
 compile/target API 37. Version 0.3 integrates simulation, GPS timing, track editing,
 foreground recording, standard OBD, analysis, and local export.
 
-> Integration note: this open-source foundation can be reviewed independently.
-> The source-recovery fixes, setup sensor discovery/readiness, session replay and
-> optional sharing described below are supplied by companion
-> [PR #2](https://github.com/omer-chandna/trackdash/pull/2). Merge PR #2 first, then
-> the foundation, to obtain the complete monitoring milestone. A foundation-only
-> build does not yet include those companion features; its offline license viewer
-> and existing dashboard/recording features are usable independently.
+Monitoring reliability and open-source foundations were integrated through
+[PR #2](https://github.com/omer-chandna/trackdash/pull/2) and
+[PR #3](https://github.com/omer-chandna/trackdash/pull/3). Non-recording live view
+is under review on `codex/live-performance-view`; see the roadmap for scope.
 
 ![Landscape rally dashboard](docs/screenshots/rally-demo-landscape.png)
 
@@ -44,11 +41,32 @@ The first start/finish crossing starts the timer; the next completes a lap.
 Use **Stop and save**, then **Sessions** to review laps, charts, warnings and CSV.
 All synthetic data is identified as simulation in the UI and export.
 
-**Try vehicle simulation** is a separate lightweight demo: it stops in the
+**Try vehicle simulation** (**Try simulation** in compact landscape) is a separate lightweight demo: it stops in the
 background and does not record. Session recording continues with a foreground
 service through navigation, rotation and normal backgrounding.
 
 ## Driving display and warnings
+
+### Live view without recording
+
+Choose **Live view** on Home, select the vehicle profile and adapter while parked,
+and discover the available sensors. Then choose **Start live view**. Real sources
+are selected by default; enable Simulation to try it without a car.
+
+- The dashboard is explicitly labelled **LIVE VIEW · NOT RECORDING**. It uses your
+  saved gauges, units, warning thresholds, RPM lights and SHIFT behavior.
+  Settings are loaded at startup; stop and restart live view after changing them.
+- No session, samples, warning events or settings snapshot are saved. No GPS or
+  lap timer starts, and optional telemetry sharing is always off in live view.
+  Existing saved sessions and configuration are unchanged.
+- **Stop live view**, visible Back or Android Back ends monitoring; there is no
+  save step. Rotation preserves live view. Backgrounding keeps the foreground
+  service running, with a notification action to stop it. Process death does not
+  restart it automatically.
+- Live view and recording cannot run simultaneously. Stop live view before
+  recording; an existing recording must be explicitly stopped and saved first.
+
+### Recording and warning presentation
 
 The landscape rally display uses large white numbers on black, compact controls,
 and 12 green/yellow/red RPM lights. Configure **Shift RPM / redline** for a real
